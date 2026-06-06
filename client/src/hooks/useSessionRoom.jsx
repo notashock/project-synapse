@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef, useContext } from 'react';
+import { useEffect, useState, useRef, useContext, useCallback } from 'react';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
+import * as db from '../services/db';
 
 export const useSessionRoom = (sessionId, navigate) => {
     const { user } = useContext(AuthContext);
@@ -25,27 +26,22 @@ export const useSessionRoom = (sessionId, navigate) => {
     // Refs
     const chatEndRef = useRef(null);
     const stompClientRef = useRef(null);
-    const incomingFilesRef = useRef({});
     const activeUploadsRef = useRef({}); // Stores fileId -> { file, aborted, reader }
 
     // Helper to stream chunks starting from specific index (enables resume/concurrency)
-    const streamFileFromChunk = (fileId, startChunkIndex) => {
+    const streamFileFromChunk = useCallback((fileId, startChunkIndex) => {
         const uploadObj = activeUploadsRef.current[fileId];
         if (!uploadObj) return;
 
-        // Cancel previous streaming reader if it is active for this file
         uploadObj.aborted = true;
         if (uploadObj.reader) {
-            try {
-                uploadObj.reader.abort();
-            } catch (e) {}
+            try { uploadObj.reader.abort(); } catch { /* ignore */ }
         }
 
         const { file } = uploadObj;
-        const CHUNK_SIZE = 16380;
+        const CHUNK_SIZE = 1048576; // 1MB chunks
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
         
-        // Reset states for this stream run
         uploadObj.aborted = false;
         const reader = new FileReader();
         uploadObj.reader = reader;
@@ -64,25 +60,37 @@ export const useSessionRoom = (sessionId, navigate) => {
                     type: 'CHUNK',
                     fileId,
                     chunkIndex,
-                    data: base64Data
+                    data: base64Data,
+                    fileName: '',
+                    fileType: '',
+                    fileSize: file.size,
+                    sender: user.username,
+                    totalChunks: totalChunks
                 }));
             }
 
             offset += CHUNK_SIZE;
             chunkIndex++;
 
-            // Update sender progress
             setUploadProgress(Math.round((chunkIndex / totalChunks) * 100));
 
             if (offset < file.size) {
                 if (!uploadObj.aborted) {
-                    readNextChunk();
+                    // Yield execution to the main thread / browser event loop to keep UI smooth
+                    setTimeout(readNextChunk, 10);
                 }
             } else {
                 if (stompClientRef.current && stompClientRef.current.connected) {
                     stompClientRef.current.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({
                         type: 'END',
-                        fileId
+                        fileId,
+                        chunkIndex: 0,
+                        data: '',
+                        fileName: '',
+                        fileType: '',
+                        fileSize: file.size,
+                        sender: user.username,
+                        totalChunks: totalChunks
                     }));
                 }
                 toast.success(`File shared completely!`);
@@ -105,7 +113,74 @@ export const useSessionRoom = (sessionId, navigate) => {
         };
 
         readNextChunk();
-    };
+    }, [sessionId, user?.username]);
+
+    // Restore completed files from DB and request missing files from server sync
+    const syncFilesWithServer = useCallback(async (stompClient) => {
+        try {
+            // 1. Fetch truth from server
+            const res = await api.get(`/sessions/${sessionId}/files`);
+            const serverFiles = res.data; // Array of SharedFile metadata
+            
+            // 2. Load completed blobs from local IndexedDB
+            const loadedSharedFiles = [];
+            
+            for (const serverFile of serverFiles) {
+                const localMetadata = await db.getFileMetadata(serverFile.fileId);
+                const localBlobInfo = await db.getFileBlob(serverFile.fileId);
+                
+                if (localBlobInfo && localBlobInfo.blob) {
+                    // We already have the complete file locally
+                    const fileUrl = URL.createObjectURL(localBlobInfo.blob);
+                    loadedSharedFiles.push({ ...serverFile, url: fileUrl });
+                } else if (serverFile.sender !== user.username) {
+                    // We don't have it, and we didn't send it. We need to request it.
+                    // Check if we have partial chunks
+                    let nextExpectedIndex = 0;
+                    if (localMetadata) {
+                        const existingChunks = await db.getAllFileChunks(serverFile.fileId);
+                        while (existingChunks.find(c => c.chunkIndex === nextExpectedIndex)) {
+                            nextExpectedIndex++;
+                        }
+                    } else {
+                        // Initialize metadata in DB for tracking progress
+                        await db.saveFileMetadata({ ...serverFile, status: 'downloading' });
+                    }
+
+                    // Set initial progress in UI
+                    setIncomingTransfers(prev => ({
+                        ...prev, 
+                        [serverFile.fileId]: { 
+                            ...serverFile, 
+                            progress: Math.round((nextExpectedIndex / serverFile.totalChunks) * 100) 
+                        }
+                    }));
+
+                    toast(`Syncing missing file: ${serverFile.fileName}...`);
+                    
+                    if (stompClient && stompClient.connected) {
+                        stompClient.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({
+                            type: 'RESUME_REQUEST',
+                            fileId: serverFile.fileId,
+                            chunkIndex: nextExpectedIndex,
+                            sender: user.username,
+                            fileName: serverFile.fileName || '',
+                            fileType: serverFile.fileType || '',
+                            fileSize: serverFile.fileSize || 0,
+                            totalChunks: serverFile.totalChunks || 0,
+                            data: ''
+                        }));
+                    }
+                }
+            }
+            
+            setSharedFiles(loadedSharedFiles);
+            
+        } catch (err) {
+            console.error("Failed to sync session files:", err);
+            toast.error("Failed to sync files with server.");
+        }
+    }, [sessionId, user?.username]);
 
     useEffect(() => {
         if (!user?.username) return;
@@ -134,6 +209,9 @@ export const useSessionRoom = (sessionId, navigate) => {
                     }
                     setIsConnected(true);
 
+                    // Sync files once connected
+                    syncFilesWithServer(stompClient);
+
                     // 1. Presence Listener
                     stompClient.subscribe(`/topic/session/${sessionId}/presence`, (message) => {
                         const payload = message.body;
@@ -151,65 +229,99 @@ export const useSessionRoom = (sessionId, navigate) => {
                     });
 
                     // 3. File Relay Listener
-                    stompClient.subscribe(`/topic/session/${sessionId}/file-stream`, (message) => {
+                    stompClient.subscribe(`/topic/session/${sessionId}/file-stream`, async (message) => {
                         const data = JSON.parse(message.body);
 
-                        // If it's a resume request and we are the sender, handle it
                         if (data.type === 'RESUME_REQUEST') {
-                            if (activeUploadsRef.current[data.fileId]) {
-                                toast(`Resuming "${activeUploadsRef.current[data.fileId].file.name}" transfer from chunk ${data.chunkIndex}...`, { icon: '🔄' });
+                            let uploadObj = activeUploadsRef.current[data.fileId];
+                            if (!uploadObj) {
+                                // Reconstruct File reference from local IndexedDB if we are the sender
+                                const localMetadata = await db.getFileMetadata(data.fileId);
+                                const localBlobInfo = await db.getFileBlob(data.fileId);
+                                if (localMetadata && localBlobInfo && localBlobInfo.blob && localMetadata.sender === user?.username) {
+                                    activeUploadsRef.current[data.fileId] = {
+                                        file: new File([localBlobInfo.blob], localMetadata.fileName, { type: localMetadata.fileType }),
+                                        aborted: false,
+                                        reader: null
+                                    };
+                                    uploadObj = activeUploadsRef.current[data.fileId];
+                                }
+                            }
+
+                            if (uploadObj) {
+                                toast(`Resuming "${uploadObj.file.name || 'file'}" transfer from chunk ${data.chunkIndex}...`);
                                 streamFileFromChunk(data.fileId, data.chunkIndex);
                             }
                             return;
                         }
 
-                        // Safety check: Backend interceptor should block this, but we double-check
                         if (data.sender === user?.username) return;
 
+                        // Avoid processing stream chunks if we already completed this file
+                        const localMetadata = await db.getFileMetadata(data.fileId);
+                        if (localMetadata && localMetadata.status === 'completed') {
+                            return;
+                        }
+
                         if (data.type === 'START') {
-                            // Only initialize state if we don't already have partial chunks cached
-                            if (!incomingFilesRef.current[data.fileId]) {
-                                incomingFilesRef.current[data.fileId] = { metadata: data, chunks: [] };
-                            }
-                            toast(`Incoming file: ${data.fileName}`, { icon: '⬇️' });
+                            // Initialize local DB tracking
+                            await db.saveFileMetadata({ ...data, status: 'downloading' });
+                            toast(`Incoming file: ${data.fileName}`);
                             setIncomingTransfers(prev => ({
-                                ...prev, [data.fileId]: { ...data, progress: prev[data.fileId]?.progress || 0 }
+                                ...prev, [data.fileId]: { ...data, progress: 0 }
                             }));
                         } 
                         else if (data.type === 'CHUNK') {
-                            if (incomingFilesRef.current[data.fileId]) {
-                                const binaryStr = window.atob(data.data);
-                                const bytes = new Uint8Array(binaryStr.length);
-                                for (let i = 0; i < binaryStr.length; i++) {
-                                    bytes[i] = binaryStr.charCodeAt(i);
-                                }
-                                incomingFilesRef.current[data.fileId].chunks[data.chunkIndex] = bytes;
-
-                                const total = incomingFilesRef.current[data.fileId].metadata.totalChunks;
-                                setIncomingTransfers(prev => {
-                                    if (!prev[data.fileId]) return prev;
-                                    // Count active loaded chunks to calculate actual progress (deduplicated)
-                                    const loadedChunksCount = incomingFilesRef.current[data.fileId].chunks.filter(Boolean).length;
-                                    return {
-                                        ...prev,
-                                        [data.fileId]: { ...prev[data.fileId], progress: Math.round((loadedChunksCount / total) * 100) }
-                                    };
-                                });
+                            const binaryStr = window.atob(data.data);
+                            const bytes = new Uint8Array(binaryStr.length);
+                            for (let i = 0; i < binaryStr.length; i++) {
+                                bytes[i] = binaryStr.charCodeAt(i);
                             }
+                            
+                            await db.saveFileChunk(data.fileId, data.chunkIndex, bytes);
+                            
+                            setIncomingTransfers(prev => {
+                                const currentFile = prev[data.fileId] || {
+                                    fileId: data.fileId,
+                                    fileName: data.fileName || 'Incoming File',
+                                    fileSize: data.fileSize || 0,
+                                    sender: data.sender,
+                                    totalChunks: data.totalChunks || 1
+                                };
+                                
+                                const total = currentFile.totalChunks || data.totalChunks || 1;
+                                const progress = Math.min(100, Math.round(((data.chunkIndex + 1) / total) * 100));
+                                
+                                return {
+                                    ...prev,
+                                    [data.fileId]: { 
+                                        ...currentFile, 
+                                        progress 
+                                    }
+                                };
+                            });
                         } 
                         else if (data.type === 'END') {
-                            const fileData = incomingFilesRef.current[data.fileId];
-                            if (fileData) {
+                            const metadata = await db.getFileMetadata(data.fileId);
+                            if (metadata) {
                                 try {
-                                    const blob = new Blob(fileData.chunks, { type: fileData.metadata.fileType });
-                                    const fileUrl = URL.createObjectURL(blob);
+                                    const allChunks = await db.getAllFileChunks(data.fileId);
+                                    const blobParts = allChunks.map(c => c.data);
+                                    const blob = new Blob(blobParts, { type: metadata.fileType });
                                     
-                                    setSharedFiles((prev) => [...prev, { ...fileData.metadata, url: fileUrl }]);
-                                    toast.success(`Ready: ${fileData.metadata.fileName}`);
+                                    await db.saveFileBlob(data.fileId, blob);
+                                    await db.saveFileMetadata({ ...metadata, status: 'completed' });
+                                    
+                                    const fileUrl = URL.createObjectURL(blob);
+                                    setSharedFiles((prev) => {
+                                        if (prev.some(f => f.fileId === metadata.fileId)) return prev;
+                                        return [...prev, { ...metadata, url: fileUrl }];
+                                    });
+                                    toast.success(`Ready: ${metadata.fileName}`);
                                 } catch (e) {
-                                    toast.error(`Transfer of ${fileData.metadata.fileName} was corrupted.`);
+                                    console.error("Assembly error", e);
+                                    toast.error(`Transfer of ${metadata.fileName} was corrupted.`);
                                 } finally {
-                                    delete incomingFilesRef.current[data.fileId];
                                     setIncomingTransfers(prev => {
                                         const newState = { ...prev };
                                         delete newState[data.fileId];
@@ -219,29 +331,8 @@ export const useSessionRoom = (sessionId, navigate) => {
                             }
                         }
                     });
-
-                    // Auto-Resume Routine: Request missing chunks for any incomplete downloads
-                    Object.keys(incomingFilesRef.current).forEach((fileId) => {
-                        const fileData = incomingFilesRef.current[fileId];
-                        if (fileData) {
-                            let nextExpectedIndex = 0;
-                            // Find the first index where chunk is missing
-                            while (fileData.chunks[nextExpectedIndex] !== undefined) {
-                                nextExpectedIndex++;
-                            }
-                            
-                            stompClient.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({
-                                type: 'RESUME_REQUEST',
-                                fileId: fileId,
-                                chunkIndex: nextExpectedIndex,
-                                sender: user.username // Relayed to sender
-                            }));
-
-                            toast(`Reconnected. Resuming "${fileData.metadata.fileName}" from chunk ${nextExpectedIndex}...`, { icon: '🔄' });
-                        }
-                    });
                 },
-                (error) => {
+                () => {
                     setIsConnected(false);
                     if (isMounted) {
                         toast.error("WebSocket connection lost. Retrying in 5 seconds...");
@@ -272,15 +363,19 @@ export const useSessionRoom = (sessionId, navigate) => {
             }
             if (!isLeaving) api.post(`/sessions/leave/${sessionId}`).catch(() => {});
         };
-    }, [sessionId, navigate, isLeaving, user?.username]);
+    }, [sessionId, navigate, isLeaving, user?.username, streamFileFromChunk, syncFilesWithServer]);
 
-    const handleLeaveSession = async () => {
+    const handleLeaveSession = useCallback(async () => {
         if (isLeaving) return;
         setIsLeaving(true);
-        toast('Disconnecting...', { icon: '👋' });
-        try { await api.post(`/sessions/leave/${sessionId}`); } 
-        catch (error) {} finally { navigate('/dashboard'); }
-    };
+        toast('Disconnecting and cleaning up...');
+        try { 
+            await api.post(`/sessions/leave/${sessionId}`); 
+            // Cleanup indexedDB to save user space
+            await db.clearSessionFiles();
+        } 
+        catch { /* ignore */ } finally { navigate('/dashboard'); }
+    }, [isLeaving, sessionId, navigate]);
 
     const handleSendMessage = (messageText) => {
         if (!messageText.trim() || !stompClientRef.current || !isConnected) return;
@@ -292,28 +387,32 @@ export const useSessionRoom = (sessionId, navigate) => {
         stompClientRef.current.send(`/app/session/${sessionId}/chat.send`, {}, JSON.stringify(payload));
     };
 
-    const handleFileUpload = (file) => {
+    const handleFileUpload = async (file) => {
         if (!file || !stompClientRef.current || isUploading) return;
         
         setIsUploading(true);
         setUploadProgress(0); 
         
         const fileId = Math.random().toString(36).substring(7);
-        const CHUNK_SIZE = 16380; 
+        const CHUNK_SIZE = 1048576; // 1MB chunks
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
         const metadata = { fileId, fileName: file.name, fileType: file.type, fileSize: file.size, sender: user.username, totalChunks };
 
-        // Register in cache
+        // Save immediately to DB as completed since we are the sender
+        await db.saveFileMetadata({ ...metadata, status: 'completed' });
+        await db.saveFileBlob(fileId, file);
+
         activeUploadsRef.current[fileId] = { file, aborted: false, reader: null };
 
         // Broadcast START event
         stompClientRef.current.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({ type: 'START', ...metadata }));
 
-        // Add file to local UI instantly since the backend blocks the echo broadcast
         const fileUrl = URL.createObjectURL(file);
-        setSharedFiles((prev) => [...prev, { ...metadata, url: fileUrl }]);
+        setSharedFiles((prev) => {
+            if (prev.some(f => f.fileId === metadata.fileId)) return prev;
+            return [...prev, { ...metadata, url: fileUrl }];
+        });
 
-        // Begin streaming from chunk 0
         streamFileFromChunk(fileId, 0);
     };
 

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/context/AuthContext.jsx
 import { createContext, useState, useEffect } from 'react';
 import api from '../services/api';
@@ -36,7 +37,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const register = async (username, email, password, navigate) => {
+    const register = async (username, email, password) => {
         try {
             await api.post('/auth/register', { username, email, password });
             toast.success('Registration successful! Please login.');
@@ -51,7 +52,7 @@ export const AuthProvider = ({ children }) => {
             // Tell the backend to blacklist this token
             await api.post('/auth/logout');
         } catch (error) {
-            console.error("Backend logout failed, proceeding with local logout.");
+            console.error("Backend logout failed, proceeding with local logout.", error);
         } finally {
             // Wipe local storage regardless of backend response
             localStorage.removeItem('token');
