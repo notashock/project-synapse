@@ -72,7 +72,7 @@ export default function Login() {
                 
                 {/* Branding/Logo */}
                 <div className="text-center mb-6">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-[0_0_20px_rgba(59,130,246,0.3)] mb-3">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-linear-to-tr from-blue-600 to-indigo-500 shadow-[0_0_20px_rgba(59,130,246,0.3)] mb-3">
                         <Zap className="w-6 h-6 text-white" />
                     </div>
                     <h1 className="text-2xl font-black tracking-tight text-white">

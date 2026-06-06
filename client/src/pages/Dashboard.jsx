@@ -83,14 +83,14 @@ export default function Dashboard() {
     };
 
     return (
-        <div className="min-h-[calc(100dvh-53px)] bg-gradient-to-b from-gray-900 via-gray-950 to-black text-white p-4 md:p-8 relative overflow-hidden">
+        <div className="h-[calc(100dvh-53px)] bg-linear-to-b from-gray-900 via-gray-950 to-black text-white p-4 md:p-8 relative overflow-y-auto custom-scrollbar">
             {/* Background glowing effects */}
             <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
             <div className="absolute bottom-10 left-1/4 w-96 h-96 bg-purple-600/5 rounded-full blur-[120px] pointer-events-none"></div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 relative z-10">
                 {/* CREATE SESSION FORM */}
-                <div className="lg:col-span-1 order-first lg:order-none">
+                <div className="lg:col-span-1 order-first lg:order-0">
                     <div className="bg-white/5 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-white/10 shadow-xl">
                         <h2 className="text-sm font-bold mb-4 text-gray-200 uppercase tracking-wider flex items-center gap-2">
                             <Plus className="w-4 h-4 text-blue-400" />
@@ -148,49 +148,51 @@ export default function Dashboard() {
                             <p className="text-xs text-gray-500 mt-2">Initialize a new session on the left panel.</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {sessions.map((session) => (
-                                <div key={session.sessionId} className="bg-white/5 p-5 rounded-2xl border border-white/10 shadow-lg flex flex-col justify-between hover:border-white/20 transition-all duration-300 group">
-                                    <div>
-                                        <h3 className="text-md font-bold text-gray-100 truncate group-hover:text-blue-400 transition duration-200">{session.sessionTitle}</h3>
-                                        <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
-                                            <Users className="w-3 h-3" />
-                                            Host: <span className="text-gray-300 font-semibold">@{session.trainerUsername}</span>
-                                        </p>
+                        <div className="max-h-[calc(100dvh-220px)] overflow-y-auto pr-1 custom-scrollbar">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {sessions.map((session) => (
+                                    <div key={session.sessionId} className="bg-white/5 p-5 rounded-2xl border border-white/10 shadow-lg flex flex-col justify-between hover:border-white/20 transition-all duration-300 group">
+                                        <div>
+                                            <h3 className="text-md font-bold text-gray-100 truncate group-hover:text-blue-400 transition duration-200">{session.sessionTitle}</h3>
+                                            <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
+                                                <Users className="w-3 h-3" />
+                                                Host: <span className="text-gray-300 font-semibold">@{session.trainerUsername}</span>
+                                            </p>
+                                            
+                                            {user?.username === session.trainerUsername && (
+                                                <div className="mt-3 flex items-center gap-2">
+                                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Access Code:</span>
+                                                    <span className="text-xs font-mono font-bold tracking-[0.15em] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                                                        {session.joinCode}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
                                         
-                                        {user?.username === session.trainerUsername && (
-                                            <div className="mt-3 flex items-center gap-2">
-                                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Access Code:</span>
-                                                <span className="text-xs font-mono font-bold tracking-[0.15em] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
-                                                    {session.joinCode}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    <div className="mt-6 flex items-center gap-3">
-                                        <button 
-                                            onClick={() => handleJoinSession(session)}
-                                            disabled={joiningId === session.sessionId || deletingId === session.sessionId}
-                                            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white py-2 px-3 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center justify-center gap-1.5"
-                                        >
-                                            <ArrowRight className="w-3.5 h-3.5" />
-                                            {joiningId === session.sessionId ? 'Joining...' : 'Join Workspace'}
-                                        </button>
-                                        
-                                        {user?.username === session.trainerUsername && (
+                                        <div className="mt-6 flex items-center gap-3">
                                             <button 
-                                                onClick={() => handleDeleteSession(session.sessionId)}
-                                                disabled={deletingId === session.sessionId || joiningId === session.sessionId}
-                                                className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 disabled:bg-gray-850 disabled:opacity-50 text-red-400 py-2 px-4 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center gap-1.5"
+                                                onClick={() => handleJoinSession(session)}
+                                                disabled={joiningId === session.sessionId || deletingId === session.sessionId}
+                                                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white py-2 px-3 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center justify-center gap-1.5"
                                             >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                                {deletingId === session.sessionId ? 'Ending...' : 'End'}
+                                                <ArrowRight className="w-3.5 h-3.5" />
+                                                {joiningId === session.sessionId ? 'Joining...' : 'Join Workspace'}
                                             </button>
-                                        )}
+                                            
+                                            {user?.username === session.trainerUsername && (
+                                                <button 
+                                                    onClick={() => handleDeleteSession(session.sessionId)}
+                                                    disabled={deletingId === session.sessionId || joiningId === session.sessionId}
+                                                    className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 disabled:bg-gray-850 disabled:opacity-50 text-red-400 py-2 px-4 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center gap-1.5"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    {deletingId === session.sessionId ? 'Ending...' : 'End'}
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>

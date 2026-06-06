@@ -29,7 +29,7 @@ export default function SharedFiles({ sessionData }) {
                 {isUploading ? (
                     <div className="relative overflow-hidden w-28 sm:w-36 h-7 sm:h-8 rounded-lg bg-gray-700 border border-gray-600 flex items-center justify-center">
                         <div 
-                            className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-blue-600 to-indigo-500 transition-all duration-500 ease-out" 
+                            className="absolute left-0 top-0 bottom-0 bg-linear-to-r from-blue-600 to-indigo-500 transition-all duration-500 ease-out" 
                             style={{ width: `${uploadProgress}%` }}
                         />
                         <span className="relative z-10 text-[10px] sm:text-xs text-white font-bold drop-shadow-md">
@@ -67,7 +67,7 @@ export default function SharedFiles({ sessionData }) {
                                     </p>
                                 </div>
                                 <div className="w-16 sm:w-24 bg-gray-800 h-3.5 sm:h-4 rounded-full overflow-hidden border border-gray-600 shrink-0 relative flex justify-center items-center">
-                                    <div className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500 ease-out rounded-full" style={{ width: `${file.progress}%` }}></div>
+                                    <div className="absolute left-0 top-0 bottom-0 bg-linear-to-r from-blue-500 to-indigo-500 transition-all duration-500 ease-out rounded-full" style={{ width: `${file.progress}%` }}></div>
                                     <span className="text-[8px] sm:text-[9px] relative z-10 font-bold drop-shadow-md">{file.progress}%</span>
                                 </div>
                             </div>

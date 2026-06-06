@@ -30,7 +30,7 @@ export default function ActivitySidebar({ notifications, isActivityOpen, setIsAc
                     </div>
                 ) : (
                     notifications.map((note, index) => (
-                        <div key={index} className="flex items-start gap-2.5 text-[10px] sm:text-xs font-medium text-gray-300 bg-white/5 p-2.5 sm:p-3 rounded-lg border-l-2 border-blue-500/60 hover:bg-white/[0.07] transition break-words">
+                        <div key={index} className="flex items-start gap-2.5 text-[10px] sm:text-xs font-medium text-gray-300 bg-white/5 p-2.5 sm:p-3 rounded-lg border-l-2 border-blue-500/60 hover:bg-white/[0.07] transition break-word">
                             <Bell className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
                             <span>{note}</span>
                         </div>

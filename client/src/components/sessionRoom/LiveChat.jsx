@@ -42,7 +42,7 @@ export default function LiveChat({ sessionData, trainer }) {
                                         </span>
                                     )}
                                 </span>
-                                <div className={`px-3 sm:px-4 py-2 rounded-2xl max-w-[85%] sm:max-w-[75%] shadow-md text-xs sm:text-sm break-words ${
+                                <div className={`px-3 sm:px-4 py-2 rounded-2xl max-w-[85%] sm:max-w-[75%] shadow-md text-xs sm:text-sm break-word ${
                                     isMe 
                                     ? 'bg-blue-600 text-white rounded-tr-none shadow-[0_2px_8px_rgba(59,130,246,0.15)]' 
                                     : isTrainer

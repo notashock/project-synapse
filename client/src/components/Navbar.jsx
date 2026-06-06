@@ -61,7 +61,7 @@ export default function Navbar() {
                 {/* LEFT: Logo */}
                 <div className="flex items-center gap-3 min-w-0">
                     <div 
-                        className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-600/20 shrink-0 cursor-pointer"
+                        className="w-8 h-8 rounded-lg bg-linear-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-600/20 shrink-0 cursor-pointer"
                         onClick={() => !isSessionPage && navigate('/dashboard')}
                     >
                         <Zap className="w-4 h-4 text-white" />
@@ -77,7 +77,7 @@ export default function Navbar() {
                             </p>
                         </div>
                     ) : (
-                        <h1 className="text-base sm:text-lg font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">
+                        <h1 className="text-base sm:text-lg font-extrabold tracking-tight bg-linear-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">
                             Synapse
                         </h1>
                     )}
