@@ -1,6 +1,8 @@
 package com.college.placementhub.controller;
 
 import com.college.placementhub.dto.FileStreamMessage;
+import com.college.placementhub.model.SharedFile;
+import com.college.placementhub.repository.SharedFileRepository;
 import com.college.placementhub.service.SessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,7 @@ public class FileStreamController {
 
     private final SimpMessagingTemplate template;
     private final SessionService sessionService;
+    private final SharedFileRepository sharedFileRepository;
 
     @MessageMapping("/session/{sessionId}/stream")
     public void relayFileChunk(
@@ -27,7 +30,24 @@ public class FileStreamController {
             @Payload FileStreamMessage message,
             SimpMessageHeaderAccessor headerAccessor // 1. Inject the accessor
     ) {
+        log.info("Relaying file-stream message: type={}, fileId={}, sender={}, chunkIndex={} in session={}", 
+                message.type(), message.fileId(), message.sender(), message.chunkIndex(), sessionId);
         if (sessionService.isValidSession(sessionId)) {
+
+            if ("START".equals(message.type())) {
+                SharedFile sharedFile = new SharedFile(
+                        message.fileId(),
+                        sessionId,
+                        message.fileName(),
+                        message.fileType(),
+                        message.fileSize(),
+                        message.sender(),
+                        message.totalChunks(),
+                        System.currentTimeMillis()
+                );
+                sharedFileRepository.save(sharedFile);
+                log.info("File Metadata Saved: {} ({}) in Session: {}", message.fileName(), message.fileId(), sessionId);
+            }
 
             // 2. Grab the sender's unique socket ID and put it in a Header Map
             String senderSocketId = headerAccessor.getSessionId();

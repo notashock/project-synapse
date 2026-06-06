@@ -6,6 +6,7 @@ import com.college.placementhub.dto.SessionResponse;
 import com.college.placementhub.model.ActiveSession;
 import com.college.placementhub.security.UserDetailsImpl;
 import com.college.placementhub.service.SessionService;
+import com.college.placementhub.repository.SharedFileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 public class SessionController {
 
     private final SessionService sessionService;
+    private final SharedFileRepository sharedFileRepository;
 
     @PostMapping("/create")
     public ResponseEntity<?> startSession(
@@ -61,6 +63,14 @@ public class SessionController {
     @GetMapping("/active")
     public ResponseEntity<?> getActiveSessions() {
         return ResponseEntity.ok(sessionService.getAllActiveSessions());
+    }
+
+    @GetMapping("/{sessionId}/files")
+    public ResponseEntity<?> getSessionFiles(@PathVariable String sessionId) {
+        if (sessionService.isValidSession(sessionId)) {
+            return ResponseEntity.ok(sharedFileRepository.findBySessionId(sessionId));
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
     }
 
     @DeleteMapping("/end/{sessionId}")

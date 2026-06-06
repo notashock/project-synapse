@@ -2,6 +2,7 @@ package com.college.placementhub.service;
 
 import com.college.placementhub.dto.ChatMessage;
 import com.college.placementhub.model.ActiveSession;
+import com.college.placementhub.repository.SharedFileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -18,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SessionService {
 
     private final SimpMessagingTemplate template;
+    private final SharedFileRepository sharedFileRepository;
     private final Map<String, ActiveSession> liveSessions = new ConcurrentHashMap<>();
 
     public ActiveSession createSession(String trainerUsername, String sessionTitle) {
@@ -60,7 +62,10 @@ public class SessionService {
             session.getParticipants().remove(username);
             template.convertAndSend("/topic/session/" + sessionId + "/presence", username + " has left the session.");
 
-            log.info("{} has left the session: {}", username, sessionId);
+            // Clear the shared file metadata of the leaving user in this session
+            sharedFileRepository.deleteBySessionIdAndSender(sessionId, username);
+
+            log.info("{} has left the session: {}, cleaned up their shared files.", username, sessionId);
             return true;
         }
         return false;

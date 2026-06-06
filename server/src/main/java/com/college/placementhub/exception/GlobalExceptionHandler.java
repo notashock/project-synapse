@@ -46,12 +46,11 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now(),
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "Internal Server Error",
-                "An unexpected error occurred. Please try again later.",
+                ex.getClass().getName() + ": " + ex.getMessage(),
                 request.getRequestURI()
         );
 
         // Print the actual stack trace to your console so you can debug it,
-        // but the user only sees the clean JSON above.
         ex.printStackTrace();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
