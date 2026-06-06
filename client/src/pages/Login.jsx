@@ -204,6 +204,20 @@ export default function Login() {
                         {isLogin ? 'Register here' : 'Login here'}
                     </button>
                 </p>
+                
+                <div className="mt-6 flex items-center justify-center gap-2">
+                    <div className="h-px bg-gray-800 flex-1"></div>
+                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">OR</span>
+                    <div className="h-px bg-gray-800 flex-1"></div>
+                </div>
+
+                <button 
+                    type="button"
+                    onClick={() => navigate('/dashboard')}
+                    className="w-full mt-6 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 text-gray-300 font-bold py-3 px-4 rounded-xl transition-all duration-200 flex justify-center items-center gap-2 active:scale-[0.98]"
+                >
+                    Continue as Guest
+                </button>
             </div>
         </div>
     );

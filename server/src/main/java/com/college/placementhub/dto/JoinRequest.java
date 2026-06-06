@@ -1,4 +1,4 @@
 package com.college.placementhub.dto;
 
-public record JoinRequest(String joinCode) {
+public record JoinRequest(String joinCode, String guestUsername) {
 }

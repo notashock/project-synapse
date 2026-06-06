@@ -3,6 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useSessionRoom } from '../hooks/useSessionRoom';
 import { useSessionNav } from '../context/SessionNavContext';
 import { AuthContext } from '../context/AuthContext';
+import api from '../services/api';
+import toast from 'react-hot-toast';
 
 import SharedFiles from '../components/sessionRoom/SharedFiles';
 import LiveChat from '../components/sessionRoom/LiveChat';
@@ -15,18 +17,43 @@ export default function SessionRoom() {
     const { user, loading } = useContext(AuthContext);
     const { setSessionNav } = useSessionNav();
     
-    const { joinCode, trainer, sessionTitle } = location.state || {}; 
-
+    const [sessionMeta, setSessionMeta] = useState(location.state || null);
+    const [loadingMeta, setLoadingMeta] = useState(!location.state);
     const [isActivityOpen, setIsActivityOpen] = useState(false);
-    const sessionData = useSessionRoom(sessionId, navigate);
+
+    useEffect(() => {
+        if (!sessionMeta) {
+            const fetchMeta = async () => {
+                try {
+                    const res = await api.get(`/sessions/${sessionId}`);
+                    setSessionMeta(res.data);
+                } catch (err) {
+                    toast.error("Session has ended or is not available.");
+                    navigate('/dashboard');
+                } finally {
+                    setLoadingMeta(false);
+                }
+            };
+            fetchMeta();
+        }
+    }, [sessionId, sessionMeta, navigate]);
+
+    // Initialize hook once session metadata is available
+    const sessionData = useSessionRoom(
+        sessionId, 
+        navigate, 
+        sessionMeta?.isLocal, 
+        sessionMeta?.trainerUsername || sessionMeta?.trainer
+    );
 
     // Push session-specific data into Navbar via context
     useEffect(() => {
+        if (!sessionMeta) return;
         setSessionNav({
             sessionId,
-            sessionTitle: sessionTitle || 'Live Workspace',
-            trainer,
-            joinCode,
+            sessionTitle: sessionMeta.sessionTitle || 'Live Workspace',
+            trainer: sessionMeta.trainerUsername || sessionMeta.trainer,
+            joinCode: sessionMeta.joinCode,
             isConnected: sessionData.isConnected,
             isLeaving: sessionData.isLeaving,
             handleLeaveSession: sessionData.handleLeaveSession,
@@ -36,23 +63,26 @@ export default function SessionRoom() {
 
         return () => setSessionNav(null);
     }, [
-        sessionId, sessionTitle, trainer, joinCode,
-        sessionData.isConnected, sessionData.isLeaving, 
+        sessionId, sessionMeta, sessionData.isConnected, sessionData.isLeaving, 
         sessionData.handleLeaveSession, isActivityOpen, setSessionNav
     ]);
 
     useEffect(() => {
-        if (!loading && !user) {
+        if (!loading && !loadingMeta && !user && !sessionMeta?.isLocal) {
             navigate('/login');
         }
-    }, [user, loading, navigate]);
+    }, [user, loading, loadingMeta, navigate, sessionMeta]);
 
-    if (loading || !user) {
+    if (loading || loadingMeta) {
         return (
             <div className="flex h-screen items-center justify-center bg-gray-900 text-white font-sans">
-                <p className="animate-pulse">Verifying credentials...</p>
+                <p className="animate-pulse">Loading workspace details...</p>
             </div>
         );
+    }
+
+    if (!user && !sessionMeta?.isLocal) {
+        return null;
     }
 
     return (
@@ -60,7 +90,7 @@ export default function SessionRoom() {
             <div className="flex-1 p-3 sm:p-4 lg:p-6 flex flex-col min-w-0 h-full relative">
                 <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0 overflow-hidden pb-2">
                     <SharedFiles sessionData={sessionData} />
-                    <LiveChat sessionData={sessionData} trainer={trainer} />
+                    <LiveChat sessionData={sessionData} trainer={sessionMeta?.trainerUsername || sessionMeta?.trainer} />
                 </div>
             </div>
 

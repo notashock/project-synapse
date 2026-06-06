@@ -22,7 +22,7 @@ public class SessionService {
     private final SharedFileRepository sharedFileRepository;
     private final Map<String, ActiveSession> liveSessions = new ConcurrentHashMap<>();
 
-    public ActiveSession createSession(String trainerUsername, String sessionTitle) {
+    public ActiveSession createSession(String trainerUsername, String sessionTitle, boolean isLocal) {
         String sessionId = UUID.randomUUID().toString();
         String joinCode = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
 
@@ -31,7 +31,8 @@ public class SessionService {
                 sessionTitle,
                 trainerUsername,
                 joinCode,
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                isLocal
         );
         liveSessions.put(sessionId, newSession);
 
@@ -105,7 +106,18 @@ public class SessionService {
         return liveSessions.get(sessionId);
     }
 
+    public ActiveSession getSessionByJoinCode(String joinCode) {
+        if (joinCode == null) return null;
+        String normalized = joinCode.trim().toUpperCase();
+        return liveSessions.values().stream()
+                .filter(session -> session.getJoinCode().equalsIgnoreCase(normalized))
+                .findFirst()
+                .orElse(null);
+    }
+
     public Collection<ActiveSession> getAllActiveSessions() {
-        return liveSessions.values();
+        return liveSessions.values().stream()
+                .filter(session -> !session.isLocal())
+                .collect(java.util.stream.Collectors.toList());
     }
 }

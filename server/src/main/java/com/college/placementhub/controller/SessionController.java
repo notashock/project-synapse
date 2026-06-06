@@ -26,8 +26,21 @@ public class SessionController {
             @RequestBody SessionRequest request,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
-        ActiveSession session = sessionService.createSession(userDetails.getUsername(), request.getSessionTitle());
-        return ResponseEntity.ok(new SessionResponse(session.getSessionId(), session.getJoinCode(), session.getSessionTitle()));
+        if (!request.isLocal() && userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Cloud sessions require authentication.");
+        }
+        String username = userDetails != null ? userDetails.getUsername() : request.getGuestUsername();
+        if (username == null || username.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Username or Guest Username is required.");
+        }
+        ActiveSession session = sessionService.createSession(username, request.getSessionTitle(), request.isLocal());
+        return ResponseEntity.ok(new SessionResponse(
+                session.getSessionId(),
+                session.getJoinCode(),
+                session.getSessionTitle(),
+                session.getTrainerUsername(),
+                session.isLocal()
+        ));
     }
 
     @PostMapping("/join/{sessionId}")
@@ -39,8 +52,19 @@ public class SessionController {
         if (payload.joinCode() == null || payload.joinCode().trim().isEmpty()) {
             return ResponseEntity.badRequest().body("Join code is required.");
         }
+        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
+        }
+        if (!session.isLocal() && userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Cloud sessions require authentication.");
+        }
+        String username = userDetails != null ? userDetails.getUsername() : payload.guestUsername();
+        if (username == null || username.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Username or Guest Username is required.");
+        }
         try {
-            boolean success = sessionService.joinSession(sessionId, userDetails.getUsername(), payload.joinCode().trim());
+            boolean success = sessionService.joinSession(sessionId, username, payload.joinCode().trim());
             if (success) {
                 return ResponseEntity.ok("Joined successfully.");
             } else {
@@ -54,9 +78,20 @@ public class SessionController {
     @PostMapping("/leave/{sessionId}")
     public ResponseEntity<?> leaveSession(
             @PathVariable String sessionId,
+            @RequestParam(required = false) String guestUsername,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
-        sessionService.leaveSession(sessionId, userDetails.getUsername());
+        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
+        }
+        if (!session.isLocal() && userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Cloud sessions require authentication.");
+        }
+        String username = userDetails != null ? userDetails.getUsername() : guestUsername;
+        if (username != null) {
+            sessionService.leaveSession(sessionId, username);
+        }
         return ResponseEntity.ok("Successfully left the session.");
     }
 
@@ -65,21 +100,80 @@ public class SessionController {
         return ResponseEntity.ok(sessionService.getAllActiveSessions());
     }
 
-    @GetMapping("/{sessionId}/files")
-    public ResponseEntity<?> getSessionFiles(@PathVariable String sessionId) {
-        if (sessionService.isValidSession(sessionId)) {
-            return ResponseEntity.ok(sharedFileRepository.findBySessionId(sessionId));
+    @GetMapping("/{sessionId}")
+    public ResponseEntity<?> getSession(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ) {
+        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
         }
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
+        if (!session.isLocal() && userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Cloud sessions require authentication.");
+        }
+        return ResponseEntity.ok(new SessionResponse(
+                session.getSessionId(),
+                session.getJoinCode(),
+                session.getSessionTitle(),
+                session.getTrainerUsername(),
+                session.isLocal()
+        ));
+    }
+
+    @GetMapping("/code/{joinCode}")
+    public ResponseEntity<?> getSessionByCode(
+            @PathVariable String joinCode,
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ) {
+        ActiveSession session = sessionService.getSessionByJoinCode(joinCode);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
+        }
+        if (!session.isLocal() && userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Cloud sessions require authentication.");
+        }
+        return ResponseEntity.ok(new SessionResponse(
+                session.getSessionId(),
+                session.getJoinCode(),
+                session.getSessionTitle(),
+                session.getTrainerUsername(),
+                session.isLocal()
+        ));
+    }
+
+    @GetMapping("/{sessionId}/files")
+    public ResponseEntity<?> getSessionFiles(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ) {
+        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
+        }
+        if (!session.isLocal() && userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Cloud sessions require authentication.");
+        }
+        return ResponseEntity.ok(sharedFileRepository.findBySessionId(sessionId));
     }
 
     @DeleteMapping("/end/{sessionId}")
     public ResponseEntity<?> endSession(
             @PathVariable String sessionId,
+            @RequestParam(required = false) String guestUsername,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
+        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
+        }
+        if (!session.isLocal() && userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Cloud sessions require authentication.");
+        }
+        String username = userDetails != null ? userDetails.getUsername() : guestUsername;
+        if (username == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
         try {
-            boolean isAuthorized = sessionService.endSession(sessionId, userDetails.getUsername());
+            boolean isAuthorized = sessionService.endSession(sessionId, username);
             if (isAuthorized) {
                 return ResponseEntity.ok("Session Terminated");
             } else {

@@ -2,6 +2,7 @@ package com.college.placementhub.controller;
 
 import com.college.placementhub.dto.FileStreamMessage;
 import com.college.placementhub.model.SharedFile;
+import com.college.placementhub.model.ActiveSession;
 import com.college.placementhub.repository.SharedFileRepository;
 import com.college.placementhub.service.SessionService;
 import lombok.RequiredArgsConstructor;
@@ -30,9 +31,12 @@ public class FileStreamController {
             @Payload FileStreamMessage message,
             SimpMessageHeaderAccessor headerAccessor // 1. Inject the accessor
     ) {
-        log.info("Relaying file-stream message: type={}, fileId={}, sender={}, chunkIndex={} in session={}", 
-                message.type(), message.fileId(), message.sender(), message.chunkIndex(), sessionId);
-        if (sessionService.isValidSession(sessionId)) {
+        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        if (session != null) {
+            if (!session.isLocal() && headerAccessor.getUser() == null) {
+                log.warn("Blocked file transfer: Unauthenticated user attempted to stream to cloud session {}.", sessionId);
+                return;
+            }
 
             if ("START".equals(message.type())) {
                 SharedFile sharedFile = new SharedFile(
@@ -43,7 +47,8 @@ public class FileStreamController {
                         message.fileSize(),
                         message.sender(),
                         message.totalChunks(),
-                        System.currentTimeMillis()
+                        System.currentTimeMillis(),
+                        message.sender() != null && message.sender().startsWith("Guest-")
                 );
                 sharedFileRepository.save(sharedFile);
                 log.info("File Metadata Saved: {} ({}) in Session: {}", message.fileName(), message.fileId(), sessionId);

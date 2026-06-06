@@ -6,8 +6,9 @@ import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import * as db from '../services/db';
 
-export const useSessionRoom = (sessionId, navigate) => {
-    const { user } = useContext(AuthContext);
+export const useSessionRoom = (sessionId, navigate, isLocal, trainerUsername) => {
+    const { user, guestUsername } = useContext(AuthContext);
+    const currentUser = user?.username || guestUsername;
 
     // Data States
     const [notifications, setNotifications] = useState([]);
@@ -26,6 +27,8 @@ export const useSessionRoom = (sessionId, navigate) => {
     // Refs
     const chatEndRef = useRef(null);
     const stompClientRef = useRef(null);
+    const webrtcManagerRef = useRef(null);
+    const [connectionType, setConnectionType] = useState(isLocal ? 'webrtc' : 'server');
     const activeUploadsRef = useRef({}); // Stores fileId -> { file, aborted, reader }
 
     // Helper to stream chunks starting from specific index (enables resume/concurrency)
@@ -55,7 +58,13 @@ export const useSessionRoom = (sessionId, navigate) => {
             const dataUrl = event.target.result;
             const base64Data = dataUrl.split(',')[1];
 
-            if (stompClientRef.current && stompClientRef.current.connected) {
+            if (connectionType === 'webrtc' && webrtcManagerRef.current) {
+                webrtcManagerRef.current.sendData({
+                    streamData: true,
+                    type: 'CHUNK',
+                    fileId, chunkIndex, data: base64Data, fileName: '', fileType: '', fileSize: file.size, sender: currentUser, totalChunks
+                });
+            } else if (stompClientRef.current && stompClientRef.current.connected) {
                 stompClientRef.current.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({
                     type: 'CHUNK',
                     fileId,
@@ -64,7 +73,7 @@ export const useSessionRoom = (sessionId, navigate) => {
                     fileName: '',
                     fileType: '',
                     fileSize: file.size,
-                    sender: user.username,
+                    sender: currentUser,
                     totalChunks: totalChunks
                 }));
             }
@@ -80,7 +89,13 @@ export const useSessionRoom = (sessionId, navigate) => {
                     setTimeout(readNextChunk, 10);
                 }
             } else {
-                if (stompClientRef.current && stompClientRef.current.connected) {
+                if (connectionType === 'webrtc' && webrtcManagerRef.current) {
+                    webrtcManagerRef.current.sendData({
+                        streamData: true,
+                        type: 'END',
+                        fileId, chunkIndex: 0, data: '', fileName: '', fileType: '', fileSize: file.size, sender: currentUser, totalChunks
+                    });
+                } else if (stompClientRef.current && stompClientRef.current.connected) {
                     stompClientRef.current.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({
                         type: 'END',
                         fileId,
@@ -89,7 +104,7 @@ export const useSessionRoom = (sessionId, navigate) => {
                         fileName: '',
                         fileType: '',
                         fileSize: file.size,
-                        sender: user.username,
+                        sender: currentUser,
                         totalChunks: totalChunks
                     }));
                 }
@@ -113,7 +128,7 @@ export const useSessionRoom = (sessionId, navigate) => {
         };
 
         readNextChunk();
-    }, [sessionId, user?.username]);
+    }, [sessionId, currentUser, connectionType]);
 
     // Restore completed files from DB and request missing files from server sync
     const syncFilesWithServer = useCallback(async (stompClient) => {
@@ -133,7 +148,7 @@ export const useSessionRoom = (sessionId, navigate) => {
                     // We already have the complete file locally
                     const fileUrl = URL.createObjectURL(localBlobInfo.blob);
                     loadedSharedFiles.push({ ...serverFile, url: fileUrl });
-                } else if (serverFile.sender !== user.username) {
+                } else if (serverFile.sender !== currentUser) {
                     // We don't have it, and we didn't send it. We need to request it.
                     // Check if we have partial chunks
                     let nextExpectedIndex = 0;
@@ -158,12 +173,18 @@ export const useSessionRoom = (sessionId, navigate) => {
 
                     toast(`Syncing missing file: ${serverFile.fileName}...`);
                     
-                    if (stompClient && stompClient.connected) {
+                    if (connectionType === 'webrtc' && webrtcManagerRef.current) {
+                        webrtcManagerRef.current.sendData({
+                            streamData: true,
+                            type: 'RESUME_REQUEST', fileId: serverFile.fileId, chunkIndex: nextExpectedIndex, sender: currentUser,
+                            fileName: serverFile.fileName || '', fileType: serverFile.fileType || '', fileSize: serverFile.fileSize || 0, totalChunks: serverFile.totalChunks || 0, data: ''
+                        });
+                    } else if (stompClient && stompClient.connected) {
                         stompClient.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({
                             type: 'RESUME_REQUEST',
                             fileId: serverFile.fileId,
                             chunkIndex: nextExpectedIndex,
-                            sender: user.username,
+                            sender: currentUser,
                             fileName: serverFile.fileName || '',
                             fileType: serverFile.fileType || '',
                             fileSize: serverFile.fileSize || 0,
@@ -180,10 +201,10 @@ export const useSessionRoom = (sessionId, navigate) => {
             console.error("Failed to sync session files:", err);
             toast.error("Failed to sync files with server.");
         }
-    }, [sessionId, user?.username]);
+    }, [sessionId, currentUser, connectionType]);
 
     useEffect(() => {
-        if (!user?.username) return;
+        if (!currentUser) return;
 
         let isMounted = true;
         let socket = null;
@@ -212,33 +233,15 @@ export const useSessionRoom = (sessionId, navigate) => {
                     // Sync files once connected
                     syncFilesWithServer(stompClient);
 
-                    // 1. Presence Listener
-                    stompClient.subscribe(`/topic/session/${sessionId}/presence`, (message) => {
-                        const payload = message.body;
-                        if (payload === "SESSION_TERMINATED") {
-                            toast.error("Session ended by trainer.", { duration: 5000 });
-                            navigate('/dashboard'); 
-                        } else {
-                            setNotifications((prev) => [...prev, payload]);
-                        }
-                    });
-
-                    // 2. Chat Listener
-                    stompClient.subscribe(`/topic/session/${sessionId}/chat`, (message) => {
-                        setChatMessages((prev) => [...prev, JSON.parse(message.body)]);
-                    });
-
-                    // 3. File Relay Listener
-                    stompClient.subscribe(`/topic/session/${sessionId}/file-stream`, async (message) => {
-                        const data = JSON.parse(message.body);
-
+                    // Extract chunk handler for reuse in WebRTC
+                    const handleIncomingFileChunk = async (data) => {
                         if (data.type === 'RESUME_REQUEST') {
                             let uploadObj = activeUploadsRef.current[data.fileId];
                             if (!uploadObj) {
                                 // Reconstruct File reference from local IndexedDB if we are the sender
                                 const localMetadata = await db.getFileMetadata(data.fileId);
                                 const localBlobInfo = await db.getFileBlob(data.fileId);
-                                if (localMetadata && localBlobInfo && localBlobInfo.blob && localMetadata.sender === user?.username) {
+                                if (localMetadata && localBlobInfo && localBlobInfo.blob && localMetadata.sender === currentUser) {
                                     activeUploadsRef.current[data.fileId] = {
                                         file: new File([localBlobInfo.blob], localMetadata.fileName, { type: localMetadata.fileType }),
                                         aborted: false,
@@ -255,7 +258,7 @@ export const useSessionRoom = (sessionId, navigate) => {
                             return;
                         }
 
-                        if (data.sender === user?.username) return;
+                        if (data.sender === currentUser) return;
 
                         // Avoid processing stream chunks if we already completed this file
                         const localMetadata = await db.getFileMetadata(data.fileId);
@@ -330,7 +333,45 @@ export const useSessionRoom = (sessionId, navigate) => {
                                 }
                             }
                         }
+                    };
+
+                    // 1. Presence Listener
+                    stompClient.subscribe(`/topic/session/${sessionId}/presence`, (message) => {
+                        const payload = message.body;
+                        if (payload === "SESSION_TERMINATED") {
+                            toast.error("Session ended by trainer.", { duration: 5000 });
+                            navigate('/dashboard'); 
+                        } else {
+                            setNotifications((prev) => [...prev, payload]);
+                        }
                     });
+
+                    // 2. Chat Listener
+                    stompClient.subscribe(`/topic/session/${sessionId}/chat`, (message) => {
+                        setChatMessages((prev) => [...prev, JSON.parse(message.body)]);
+                    });
+
+                    // 3. File Relay Listener
+                    stompClient.subscribe(`/topic/session/${sessionId}/file-stream`, async (message) => {
+                        handleIncomingFileChunk(JSON.parse(message.body));
+                    });
+
+                    // 4. Initialize WebRTC if local
+                    if (isLocal) {
+                        import('../services/webrtc').then(({ WebRTCManager }) => {
+                            const isHost = currentUser === trainerUsername;
+                            webrtcManagerRef.current = new WebRTCManager(sessionId, currentUser, isHost, stompClient, {
+                                onMessage: (parsed) => setChatMessages(prev => [...prev, parsed]),
+                                onFileChunk: (parsed) => handleIncomingFileChunk(parsed),
+                                onFallbackRequired: () => {
+                                    if (connectionType !== 'server') {
+                                        setConnectionType('server');
+                                        toast.error('Local network unstable. Switched to secure server relay.', { duration: 5000 });
+                                    }
+                                }
+                            });
+                        });
+                    }
                 },
                 () => {
                     setIsConnected(false);
@@ -357,13 +398,16 @@ export const useSessionRoom = (sessionId, navigate) => {
             isMounted = false;
             window.removeEventListener('beforeunload', handleUnload);
             if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            if (webrtcManagerRef.current) {
+                webrtcManagerRef.current.disconnect();
+            }
             if (stompClientRef.current) {
                 if (stompClientRef.current.connected) stompClientRef.current.disconnect();
                 else socket.close(); 
             }
             if (!isLeaving) api.post(`/sessions/leave/${sessionId}`).catch(() => {});
         };
-    }, [sessionId, navigate, isLeaving, user?.username, streamFileFromChunk, syncFilesWithServer]);
+    }, [sessionId, navigate, isLeaving, currentUser, streamFileFromChunk, syncFilesWithServer, isLocal, trainerUsername, connectionType]);
 
     const handleLeaveSession = useCallback(async () => {
         if (isLeaving) return;
@@ -378,13 +422,19 @@ export const useSessionRoom = (sessionId, navigate) => {
     }, [isLeaving, sessionId, navigate]);
 
     const handleSendMessage = (messageText) => {
-        if (!messageText.trim() || !stompClientRef.current || !isConnected) return;
+        if (!messageText.trim() || !isConnected) return;
         
         const payload = {
-            sender: user.username,
+            sender: currentUser,
             content: messageText
         };
-        stompClientRef.current.send(`/app/session/${sessionId}/chat.send`, {}, JSON.stringify(payload));
+
+        if (connectionType === 'webrtc' && webrtcManagerRef.current) {
+            webrtcManagerRef.current.sendData(payload);
+            setChatMessages((prev) => [...prev, payload]);
+        } else if (stompClientRef.current && stompClientRef.current.connected) {
+            stompClientRef.current.send(`/app/session/${sessionId}/chat.send`, {}, JSON.stringify(payload));
+        }
     };
 
     const handleFileUpload = async (file) => {
@@ -396,7 +446,7 @@ export const useSessionRoom = (sessionId, navigate) => {
         const fileId = Math.random().toString(36).substring(7);
         const CHUNK_SIZE = 1048576; // 1MB chunks
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-        const metadata = { fileId, fileName: file.name, fileType: file.type, fileSize: file.size, sender: user.username, totalChunks };
+        const metadata = { fileId, fileName: file.name, fileType: file.type, fileSize: file.size, sender: currentUser, totalChunks };
 
         // Save immediately to DB as completed since we are the sender
         await db.saveFileMetadata({ ...metadata, status: 'completed' });
@@ -405,7 +455,11 @@ export const useSessionRoom = (sessionId, navigate) => {
         activeUploadsRef.current[fileId] = { file, aborted: false, reader: null };
 
         // Broadcast START event
-        stompClientRef.current.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({ type: 'START', ...metadata }));
+        if (connectionType === 'webrtc' && webrtcManagerRef.current) {
+            webrtcManagerRef.current.sendData({ streamData: true, type: 'START', ...metadata });
+        } else if (stompClientRef.current && stompClientRef.current.connected) {
+            stompClientRef.current.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({ type: 'START', ...metadata }));
+        }
 
         const fileUrl = URL.createObjectURL(file);
         setSharedFiles((prev) => {

@@ -8,6 +8,7 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
+    const [guestUsername, setGuestUsername] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -16,6 +17,14 @@ export const AuthProvider = ({ children }) => {
         if (storedUser && token) {
             setUser(JSON.parse(storedUser));
         }
+        
+        let storedGuest = localStorage.getItem('guestUsername');
+        if (!storedGuest) {
+            storedGuest = `Guest-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+            localStorage.setItem('guestUsername', storedGuest);
+        }
+        setGuestUsername(storedGuest);
+
         setLoading(false);
     }, []);
 
@@ -68,7 +77,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+        <AuthContext.Provider value={{ user, guestUsername, login, register, logout, loading }}>
             {children}
         </AuthContext.Provider>
     );

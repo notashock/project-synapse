@@ -21,8 +21,9 @@ public class SharedFile {
     private String sender;
     private int totalChunks;
     private long createdAt;
+    private boolean isAnonymous;
 
-    public SharedFile(String fileId, String sessionId, String fileName, String fileType, long fileSize, String sender, int totalChunks, long createdAt) {
+    public SharedFile(String fileId, String sessionId, String fileName, String fileType, long fileSize, String sender, int totalChunks, long createdAt, boolean isAnonymous) {
         this.fileId = fileId;
         this.sessionId = sessionId;
         this.fileName = fileName;
@@ -31,5 +32,6 @@ public class SharedFile {
         this.sender = sender;
         this.totalChunks = totalChunks;
         this.createdAt = createdAt;
+        this.isAnonymous = isAnonymous;
     }
 }

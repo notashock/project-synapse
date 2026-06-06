@@ -14,13 +14,15 @@ public class ActiveSession {
     private String trainerUsername;
     private String joinCode;
     private long createdAt;
+    private boolean isLocal;
     private Set<String> participants;
-    public ActiveSession(String sessionId, String sessionTitle, String trainerUsername, String joinCode, long createdAt) {
+    public ActiveSession(String sessionId, String sessionTitle, String trainerUsername, String joinCode, long createdAt, boolean isLocal) {
         this.sessionId = sessionId;
         this.sessionTitle = sessionTitle;
         this.trainerUsername = trainerUsername;
         this.joinCode = joinCode;
         this.createdAt = createdAt;
+        this.isLocal = isLocal;
         this.participants = ConcurrentHashMap.newKeySet(); // Initialize empty set
     }
 }
