@@ -17,7 +17,7 @@ export default function Login() {
     
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    const { login, register } = useContext(AuthContext);
+    const { login, register, continueAsGuest } = useContext(AuthContext);
     const navigate = useNavigate();
 
     const pingServer = useCallback(async () => {
@@ -213,7 +213,7 @@ export default function Login() {
 
                 <button 
                     type="button"
-                    onClick={() => navigate('/dashboard')}
+                    onClick={() => continueAsGuest(navigate)}
                     className="w-full mt-6 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 text-gray-300 font-bold py-3 px-4 rounded-xl transition-all duration-200 flex justify-center items-center gap-2 active:scale-[0.98]"
                 >
                     Continue as Guest

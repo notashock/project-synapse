@@ -55,6 +55,24 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const continueAsGuest = (navigate) => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
+        
+        let storedGuest = localStorage.getItem('guestUsername');
+        if (!storedGuest) {
+            storedGuest = `Guest-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+            localStorage.setItem('guestUsername', storedGuest);
+        }
+        setGuestUsername(storedGuest);
+        
+        toast.success(`Welcome Guest: ${storedGuest}`);
+        if (navigate) {
+            navigate('/dashboard');
+        }
+    };
+
     // UPDATED LOGOUT FUNCTION
     const logout = async (navigate) => {
         try {
@@ -77,7 +95,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, guestUsername, login, register, logout, loading }}>
+        <AuthContext.Provider value={{ user, guestUsername, login, register, continueAsGuest, logout, loading }}>
             {children}
         </AuthContext.Provider>
     );

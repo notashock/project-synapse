@@ -39,6 +39,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         fetchSessions();
+        setIsLocalMode(!user);
     }, [user]);
 
     const handleCreateSession = async (e) => {
