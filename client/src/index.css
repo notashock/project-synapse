@@ -14,19 +14,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom dark scrollbar */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
+/* Hide scrollbar globally for all browsers */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
 }
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, and Opera */
 }
 
 /* Download pulse animation for incoming file icon */
