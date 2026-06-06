@@ -116,8 +116,6 @@ public class SessionService {
     }
 
     public Collection<ActiveSession> getAllActiveSessions() {
-        return liveSessions.values().stream()
-                .filter(session -> !session.isLocal())
-                .collect(java.util.stream.Collectors.toList());
+        return liveSessions.values();
     }
 }

@@ -22,14 +22,14 @@ export default function Dashboard() {
     const [isJoiningByCode, setIsJoiningByCode] = useState(false);
 
     const fetchSessions = async () => {
-        if (!user) {
-            setIsLoading(false);
-            return;
-        }
         setIsLoading(true);
         try {
             const response = await api.get('/sessions/active');
-            setSessions(response.data);
+            if (user) {
+                setSessions(response.data);
+            } else {
+                setSessions(response.data.filter(s => s.isLocal ?? s.local));
+            }
         } catch (error) {
             if (error.response?.status !== 401) toast.error('Failed to load active sessions');
         } finally {
@@ -238,112 +238,80 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* LIVE SESSIONS GRID OR GUEST SPLASH */}
+                {/* LIVE SESSIONS GRID */}
                 <div className="lg:col-span-2">
-                    {user ? (
-                        <>
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                                    <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-                                    Active Rooms
-                                </h2>
-                                <button 
-                                    onClick={fetchSessions}
-                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white transition duration-200 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider active:scale-95 cursor-pointer"
-                                    title="Reload active sessions"
-                                >
-                                    <RefreshCw className="w-3.5 h-3.5" />
-                                    Reload
-                                </button>
-                            </div>
-                            
-                            {isLoading ? (
-                                <div className="flex justify-center items-center h-32 bg-white/5 rounded-2xl border border-white/10">
-                                    <p className="text-gray-400 text-sm animate-pulse">Scanning network for sessions...</p>
-                                </div>
-                            ) : sessions.length === 0 ? (
-                                <div className="bg-white/5 p-8 rounded-2xl border border-white/10 text-center shadow-inner">
-                                    <p className="text-gray-400 text-sm font-semibold">No active workspaces available.</p>
-                                    <p className="text-xs text-gray-500 mt-2">Initialize a new session on the left panel.</p>
-                                </div>
-                            ) : (
-                                <div className="max-h-[calc(100dvh-220px)] overflow-y-auto pr-1 custom-scrollbar">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {sessions.map((session) => (
-                                            <div key={session.sessionId} className="bg-white/5 p-5 rounded-2xl border border-white/10 shadow-lg flex flex-col justify-between hover:border-white/20 transition-all duration-300 group">
-                                                <div>
-                                                    <h3 className="text-md font-bold text-gray-100 truncate group-hover:text-blue-400 transition duration-200 flex items-center gap-2">
-                                                        {(session.isLocal ?? session.local) ? <Wifi className="w-4 h-4 text-blue-400" title="Local Network Session" /> : <Globe className="w-4 h-4 text-emerald-400" title="Cloud Session" />}
-                                                        {session.sessionTitle}
-                                                    </h3>
-                                                    <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
-                                                        <Users className="w-3 h-3" />
-                                                        Host: <span className="text-gray-300 font-semibold">@{session.trainerUsername}</span>
-                                                    </p>
-                                                    
-                                                    {user?.username === session.trainerUsername && (
-                                                        <div className="mt-3 flex items-center gap-2">
-                                                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Access Code:</span>
-                                                            <span className="text-xs font-mono font-bold tracking-[0.15em] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
-                                                                {session.joinCode}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                
-                                                <div className="mt-6 flex items-center gap-3">
-                                                    <button 
-                                                        onClick={() => handleJoinSession(session)}
-                                                        disabled={joiningId === session.sessionId || deletingId === session.sessionId}
-                                                        className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white py-2 px-3 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center justify-center gap-1.5"
-                                                    >
-                                                        <ArrowRight className="w-3.5 h-3.5" />
-                                                        {joiningId === session.sessionId ? 'Joining...' : 'Join Workspace'}
-                                                    </button>
-                                                    
-                                                    {user?.username === session.trainerUsername && (
-                                                        <button 
-                                                            onClick={() => handleDeleteSession(session.sessionId)}
-                                                            disabled={deletingId === session.sessionId || joiningId === session.sessionId}
-                                                            className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 disabled:bg-gray-850 disabled:opacity-50 text-red-400 py-2 px-4 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center gap-1.5"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                            {deletingId === session.sessionId ? 'Ending...' : 'End'}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                            <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                            Active Rooms
+                        </h2>
+                        <button 
+                            onClick={fetchSessions}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white transition duration-200 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider active:scale-95 cursor-pointer"
+                            title="Reload active sessions"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Reload
+                        </button>
+                    </div>
+                    
+                    {isLoading ? (
+                        <div className="flex justify-center items-center h-32 bg-white/5 rounded-2xl border border-white/10">
+                            <p className="text-gray-400 text-sm animate-pulse">Scanning network for sessions...</p>
+                        </div>
+                    ) : sessions.length === 0 ? (
+                        <div className="bg-white/5 p-8 rounded-2xl border border-white/10 text-center shadow-inner">
+                            <p className="text-gray-400 text-sm font-semibold">No active workspaces available.</p>
+                            <p className="text-xs text-gray-500 mt-2">Initialize a new session on the left panel.</p>
+                        </div>
                     ) : (
-                        <div className="bg-white/5 backdrop-blur-md p-8 rounded-2xl border border-white/10 shadow-xl flex flex-col items-center justify-center text-center h-full min-h-[350px] relative overflow-hidden group">
-                            {/* Background subtle glow */}
-                            <div className="absolute -right-20 -top-20 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all duration-700"></div>
-                            <div className="absolute -left-20 -bottom-20 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all duration-700"></div>
-                            
-                            <div className="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-6 shadow-lg shadow-blue-500/5 animate-pulse">
-                                <Wifi className="w-8 h-8 text-blue-400" />
-                            </div>
-                            <h2 className="text-xl font-bold text-gray-100 mb-2">Local P2P Sharing</h2>
-                            <p className="text-sm text-gray-400 max-w-sm mb-6 leading-relaxed">
-                                Share files and chat directly with other users on your local network. No external server transfers, fast P2P speed.
-                            </p>
-                            <div className="space-y-3 w-full max-w-xs text-left">
-                                <div className="flex items-start gap-2.5 text-xs text-gray-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0"></span>
-                                    <span>Host a session to generate a 6-digit access code.</span>
-                                </div>
-                                <div className="flex items-start gap-2.5 text-xs text-gray-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0"></span>
-                                    <span>Share the code with users on the same network to join.</span>
-                                </div>
-                                <div className="flex items-start gap-2.5 text-xs text-gray-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0"></span>
-                                    <span>WebRTC handles P2P data transfer securely in real-time.</span>
-                                </div>
+                        <div className="max-h-[calc(100dvh-220px)] overflow-y-auto pr-1 custom-scrollbar">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {sessions.map((session) => (
+                                    <div key={session.sessionId} className="bg-white/5 p-5 rounded-2xl border border-white/10 shadow-lg flex flex-col justify-between hover:border-white/20 transition-all duration-300 group">
+                                        <div>
+                                            <h3 className="text-md font-bold text-gray-100 truncate group-hover:text-blue-400 transition duration-200 flex items-center gap-2">
+                                                {(session.isLocal ?? session.local) ? <Wifi className="w-4 h-4 text-blue-400" title="Local Network Session" /> : <Globe className="w-4 h-4 text-emerald-400" title="Cloud Session" />}
+                                                {session.sessionTitle}
+                                            </h3>
+                                            <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
+                                                <Users className="w-3 h-3" />
+                                                Host: <span className="text-gray-300 font-semibold">@{session.trainerUsername}</span>
+                                            </p>
+                                            
+                                            {(user?.username === session.trainerUsername || guestUsername === session.trainerUsername) && (
+                                                <div className="mt-3 flex items-center gap-2">
+                                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Access Code:</span>
+                                                    <span className="text-xs font-mono font-bold tracking-[0.15em] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                                                        {session.joinCode}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="mt-6 flex items-center gap-3">
+                                            <button 
+                                                onClick={() => handleJoinSession(session)}
+                                                disabled={joiningId === session.sessionId || deletingId === session.sessionId}
+                                                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white py-2 px-3 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
+                                            >
+                                                <ArrowRight className="w-3.5 h-3.5" />
+                                                {joiningId === session.sessionId ? 'Joining...' : 'Join Workspace'}
+                                            </button>
+                                            
+                                            {(user?.username === session.trainerUsername || guestUsername === session.trainerUsername) && (
+                                                <button 
+                                                    onClick={() => handleDeleteSession(session.sessionId)}
+                                                    disabled={deletingId === session.sessionId || joiningId === session.sessionId}
+                                                    className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 disabled:bg-gray-850 disabled:opacity-50 text-red-400 py-2 px-4 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center gap-1.5 cursor-pointer"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    {deletingId === session.sessionId ? 'Ending...' : 'End'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}

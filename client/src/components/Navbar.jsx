@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 export default function Navbar() {
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, logout } = useContext(AuthContext);
+    const { user, guestUsername, logout } = useContext(AuthContext);
     const { sessionNav } = useSessionNav();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isEnding, setIsEnding] = useState(false);
@@ -102,10 +102,10 @@ export default function Navbar() {
                             </span>
 
                             {/* Join Code (trainer only) */}
-                            {user?.username === sessionNav.trainer && sessionNav.joinCode && (
+                            {((user?.username || guestUsername) === sessionNav.trainer) && sessionNav.joinCode && (
                                 <button 
                                     onClick={handleCopyCode}
-                                    className="flex items-center gap-1.5 bg-gray-800/80 border border-white/10 rounded-lg px-3 py-1.5 hover:border-white/20 transition group"
+                                    className="flex items-center gap-1.5 bg-gray-800/80 border border-white/10 rounded-lg px-3 py-1.5 hover:border-white/20 transition group cursor-pointer"
                                     title="Click to copy"
                                 >
                                     <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Code</span>
@@ -126,11 +126,11 @@ export default function Navbar() {
                             </button>
 
                             {/* End Session (trainer only) */}
-                            {user?.username === sessionNav.trainer && (
+                            {((user?.username || guestUsername) === sessionNav.trainer) && (
                                 <button 
                                     onClick={handleEndSession}
                                     disabled={isEnding || sessionNav.isLeaving}
-                                    className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-3 py-1.5 rounded-lg font-bold text-xs transition active:scale-95 disabled:opacity-50"
+                                    className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-3 py-1.5 rounded-lg font-bold text-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
                                 >
                                     <XCircle className="w-3.5 h-3.5" />
                                     {isEnding ? 'Ending...' : 'End'}
@@ -150,15 +150,15 @@ export default function Navbar() {
                     )}
 
                     {/* ─── DASHBOARD actions ─── */}
-                    {isDashboard && user && (
+                    {isDashboard && (user || guestUsername) && (
                         <>
                             <span className="text-xs text-gray-400 font-medium">
-                                <span className="text-blue-400 font-semibold">@{user.username}</span>
+                                <span className="text-blue-400 font-semibold">@{user?.username || guestUsername}</span>
                             </span>
                             <button 
                                 onClick={handleLogout} 
                                 disabled={isLoggingOut}
-                                className="flex items-center gap-1.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/20 text-red-300 px-3 py-1.5 rounded-lg transition font-bold text-xs uppercase tracking-wider active:scale-95 disabled:opacity-50"
+                                className="flex items-center gap-1.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/20 text-red-300 px-3 py-1.5 rounded-lg transition font-bold text-xs uppercase tracking-wider active:scale-95 disabled:opacity-50 cursor-pointer"
                             >
                                 <LogOut className="w-3.5 h-3.5" />
                                 {isLoggingOut ? 'Logging out...' : 'Logout'}
@@ -190,8 +190,8 @@ export default function Navbar() {
                                 {sessionNav.isConnected ? 'Connected' : 'Reconnecting...'}
                             </span>
 
-                            {user?.username === sessionNav.trainer && sessionNav.joinCode && (
-                                <button onClick={handleCopyCode} className="flex items-center gap-2 text-xs text-gray-300">
+                            {((user?.username || guestUsername) === sessionNav.trainer) && sessionNav.joinCode && (
+                                <button onClick={handleCopyCode} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
                                     <span className="text-gray-500 uppercase tracking-wider font-bold">Code:</span>
                                     <span className="font-mono font-bold text-blue-400 tracking-widest">{sessionNav.joinCode}</span>
                                     {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-gray-500" />}
@@ -200,17 +200,17 @@ export default function Navbar() {
 
                             <button
                                 onClick={() => { sessionNav.setIsActivityOpen?.(!sessionNav.isActivityOpen); setMobileMenuOpen(false); }}
-                                className="xl:hidden flex items-center gap-1.5 text-xs font-bold text-gray-400 bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 w-fit"
+                                className="xl:hidden flex items-center gap-1.5 text-xs font-bold text-gray-400 bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 w-fit cursor-pointer"
                             >
                                 Activity
                             </button>
 
                             <div className="flex gap-2 pt-1">
-                                {user?.username === sessionNav.trainer && (
+                                {((user?.username || guestUsername) === sessionNav.trainer) && (
                                     <button 
                                         onClick={() => { handleEndSession(); setMobileMenuOpen(false); }}
                                         disabled={isEnding}
-                                        className="flex-1 flex items-center justify-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-400 py-2 rounded-lg font-bold text-xs disabled:opacity-50"
+                                        className="flex-1 flex items-center justify-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-400 py-2 rounded-lg font-bold text-xs disabled:opacity-50 cursor-pointer"
                                     >
                                         <XCircle className="w-3.5 h-3.5" />
                                         {isEnding ? 'Ending...' : 'End'}
@@ -228,19 +228,19 @@ export default function Navbar() {
                         </>
                     )}
 
-                    {isDashboard && user && (
-                        <>
-                            <span className="text-xs text-gray-400">Logged in as <span className="text-blue-400 font-semibold">@{user.username}</span></span>
-                            <button 
-                                onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
-                                disabled={isLoggingOut}
-                                className="flex items-center justify-center gap-1.5 bg-red-500/15 border border-red-500/20 text-red-300 py-2 rounded-lg font-bold text-xs uppercase tracking-wider disabled:opacity-50"
-                            >
-                                <LogOut className="w-3.5 h-3.5" />
-                                {isLoggingOut ? 'Logging out...' : 'Logout'}
-                            </button>
-                        </>
-                    )}
+                    {isDashboard && (user || guestUsername) && (
+                                <>
+                                    <span className="text-xs text-gray-400">Logged in as <span className="text-blue-400 font-semibold">@{user?.username || guestUsername}</span></span>
+                                    <button 
+                                        onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
+                                        disabled={isLoggingOut}
+                                        className="flex items-center justify-center gap-1.5 bg-red-500/15 border border-red-500/20 text-red-300 py-2 rounded-lg font-bold text-xs uppercase tracking-wider disabled:opacity-50 cursor-pointer"
+                                    >
+                                        <LogOut className="w-3.5 h-3.5" />
+                                        {isLoggingOut ? 'Logging out...' : 'Logout'}
+                                    </button>
+                                </>
+                            )}
                 </div>
             )}
         </nav>
