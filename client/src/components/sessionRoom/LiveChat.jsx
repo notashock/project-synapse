@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { MessageSquare, Send, Shield } from 'lucide-react';
 
 export default function LiveChat({ sessionData, trainer }) {
     const { user, isConnected, chatMessages, isLeaving, chatEndRef, handleSendMessage } = sessionData;
@@ -13,17 +14,18 @@ export default function LiveChat({ sessionData, trainer }) {
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, chatEndRef]);
 
     return (
-        <div className="flex-1 lg:w-1/2 bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700 flex flex-col shadow-inner min-h-0">
-            <div className="mb-3 pb-2 border-b border-gray-700 shrink-0">
+        <div className="flex-1 lg:w-1/2 bg-gray-800/60 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/10 flex flex-col shadow-inner min-h-0">
+            <div className="mb-3 pb-2 border-b border-white/10 shrink-0">
                 <h2 className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                    <span className="text-blue-400">💬</span> Live Chat
+                    <MessageSquare className="w-4 h-4 text-blue-400" /> Live Chat
                 </h2>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                 {chatMessages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center opacity-50">
-                        <p className="text-xs sm:text-sm text-gray-400 font-semibold">Session chat is empty. Say hello!</p>
+                    <div className="h-full flex flex-col items-center justify-center opacity-50 gap-2">
+                        <MessageSquare className="w-8 h-8 text-gray-600" />
+                        <p className="text-xs text-gray-400 font-medium">Session chat is empty. Say hello!</p>
                     </div>
                 ) : (
                     chatMessages.map((msg, index) => {
@@ -34,7 +36,10 @@ export default function LiveChat({ sessionData, trainer }) {
                                 <span className={`text-[9px] sm:text-[10px] uppercase font-bold mb-0.5 px-1 flex items-center gap-1.5 ${isMe ? 'text-blue-400' : 'text-gray-400'}`}>
                                     {isMe ? 'You' : `@${msg.sender}`}
                                     {isTrainer && (
-                                        <span className="text-[8px] bg-blue-500/10 border border-blue-500/30 text-blue-400 font-extrabold px-1 rounded uppercase tracking-wider scale-90">Host</span>
+                                        <span className="flex items-center gap-0.5 text-[8px] bg-blue-500/10 border border-blue-500/30 text-blue-400 font-extrabold px-1 rounded uppercase tracking-wider">
+                                            <Shield className="w-2.5 h-2.5" />
+                                            Host
+                                        </span>
                                     )}
                                 </span>
                                 <div className={`px-3 sm:px-4 py-2 rounded-2xl max-w-[85%] sm:max-w-[75%] shadow-md text-xs sm:text-sm break-words ${
@@ -53,22 +58,23 @@ export default function LiveChat({ sessionData, trainer }) {
                 <div ref={chatEndRef} />
             </div>
 
-            <form onSubmit={onSubmit} className="flex gap-2 sm:gap-3 shrink-0 pt-3 mt-2 border-t border-gray-700">
+            <form onSubmit={onSubmit} className="flex gap-2 sm:gap-3 shrink-0 pt-3 mt-2 border-t border-white/10">
                 <input
                     type="text"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder={isConnected ? "Type a message..." : "Connecting..."}
-                    className="flex-1 bg-gray-900 text-white rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-600 focus:outline-none focus:border-blue-500 disabled:opacity-50 text-xs sm:text-sm"
+                    className="flex-1 bg-gray-900/80 text-white rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 border border-white/10 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 text-xs sm:text-sm placeholder-gray-500 transition"
                     autoComplete="off"
                     disabled={!isConnected || isLeaving}
                 />
                 <button 
                     type="submit"
                     disabled={!text.trim() || !isConnected || isLeaving}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:text-gray-400 text-white px-4 py-2 sm:py-2.5 rounded-lg font-bold transition flex justify-center items-center text-xs sm:text-sm min-w-[60px] sm:min-w-[80px]"
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg font-bold transition flex justify-center items-center gap-1.5 text-xs sm:text-sm min-w-[44px] sm:min-w-[80px] active:scale-95"
                 >
-                    Send
+                    <Send className="w-4 h-4" />
+                    <span className="hidden sm:inline">Send</span>
                 </button>
             </form>
         </div>
