@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export default function LiveChat({ sessionData }) {
+export default function LiveChat({ sessionData, trainer }) {
     const { user, isConnected, chatMessages, isLeaving, chatEndRef, handleSendMessage } = sessionData;
     const [text, setText] = useState('');
 
@@ -27,14 +27,22 @@ export default function LiveChat({ sessionData }) {
                     </div>
                 ) : (
                     chatMessages.map((msg, index) => {
-                        const isMe = msg.message === user?.username;
+                        const isMe = msg.sender === user?.username;
+                        const isTrainer = msg.sender === trainer;
                         return (
                             <div key={index} className={`flex flex-col w-full ${isMe ? 'items-end' : 'items-start'}`}>
-                                <span className={`text-[9px] sm:text-[10px] uppercase font-bold mb-0.5 px-1 ${isMe ? 'text-blue-400' : 'text-gray-400'}`}>
-                                    {isMe ? 'You' : `@${msg.message}`}
+                                <span className={`text-[9px] sm:text-[10px] uppercase font-bold mb-0.5 px-1 flex items-center gap-1.5 ${isMe ? 'text-blue-400' : 'text-gray-400'}`}>
+                                    {isMe ? 'You' : `@${msg.sender}`}
+                                    {isTrainer && (
+                                        <span className="text-[8px] bg-blue-500/10 border border-blue-500/30 text-blue-400 font-extrabold px-1 rounded uppercase tracking-wider scale-90">Host</span>
+                                    )}
                                 </span>
                                 <div className={`px-3 sm:px-4 py-2 rounded-2xl max-w-[85%] sm:max-w-[75%] shadow-md text-xs sm:text-sm break-words ${
-                                    isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-gray-700 text-gray-100 rounded-tl-none'
+                                    isMe 
+                                    ? 'bg-blue-600 text-white rounded-tr-none shadow-[0_2px_8px_rgba(59,130,246,0.15)]' 
+                                    : isTrainer
+                                    ? 'bg-gray-750 border border-blue-500/10 text-blue-100 rounded-tl-none'
+                                    : 'bg-gray-700 text-gray-100 rounded-tl-none'
                                 }`}>
                                     {msg.content}
                                 </div>

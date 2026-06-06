@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useSessionRoom } from '../hooks/useSessionRoom';
+import { AuthContext } from '../context/AuthContext';
 
 import RoomHeader from '../components/sessionRoom/RoomHeader';
 import SharedFiles from '../components/sessionRoom/SharedFiles';
@@ -11,12 +12,27 @@ export default function SessionRoom() {
     const { sessionId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+    const { user, loading } = useContext(AuthContext);
     
     // Extracting dynamic session title from dashboard routing
     const { joinCode, trainer, sessionTitle } = location.state || {}; 
 
     const [isActivityOpen, setIsActivityOpen] = useState(false);
     const sessionData = useSessionRoom(sessionId, navigate);
+
+    useEffect(() => {
+        if (!loading && !user) {
+            navigate('/login');
+        }
+    }, [user, loading, navigate]);
+
+    if (loading || !user) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-gray-900 text-white font-sans">
+                <p className="animate-pulse">Verifying credentials...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col lg:flex-row h-[100dvh] bg-gray-900 text-white font-sans overflow-hidden">
@@ -33,7 +49,7 @@ export default function SessionRoom() {
 
                 <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0 overflow-hidden pb-2">
                     <SharedFiles sessionData={sessionData} />
-                    <LiveChat sessionData={sessionData} />
+                    <LiveChat sessionData={sessionData} trainer={trainer} />
                 </div>
             </div>
 

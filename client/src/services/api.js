@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const base = import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.12:8080';
 const formattedBaseURL = base.endsWith('/') ? `${base}api` : `${base}/api`;
 
 const api = axios.create({
@@ -22,6 +22,9 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        if (error.response && typeof error.response.data === 'string') {
+            error.response.data = { message: error.response.data };
+        }
         if (error.response && error.response.status === 401) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');

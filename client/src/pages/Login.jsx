@@ -1,29 +1,24 @@
 import { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api'; // <-- Imported your custom Axios instance
+import api from '../services/api'; 
 
 export default function Login() {
-    // Form toggle state
     const [isLogin, setIsLogin] = useState(true);
     
-    // Form states
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     
-    // Server Status States
     const [isServerReady, setIsServerReady] = useState(false);
     const [isWaking, setIsWaking] = useState(true);
     const [serverError, setServerError] = useState(false);
     
-    // Submission Lock State
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const { login, register } = useContext(AuthContext);
     const navigate = useNavigate();
 
-    // --- THE WAKE-UP PING ENGINE ---
     const pingServer = useCallback(async () => {
         setIsWaking(true);
         setServerError(false);
@@ -31,9 +26,7 @@ export default function Login() {
         
         try {
             console.log("Sending wake-up ping to server...");
-            // Using your custom API instance
             await api.get('/public/health');
-            
             console.log("Server is awake and ready!");
             setIsServerReady(true);
             setServerError(false);
@@ -46,18 +39,13 @@ export default function Login() {
         }
     }, []);
 
-    // Trigger ping on initial load
     useEffect(() => {
         pingServer();
     }, [pingServer]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        // Gatekeeper: Prevent form submission while server is waking or already submitting
         if (isWaking || isSubmitting) return;
-        
-        // Lock the form
         setIsSubmitting(true);
         
         try {
@@ -69,49 +57,61 @@ export default function Login() {
                 setPassword(''); 
             }
         } finally {
-            // Unlock the form whether it succeeds or fails
             setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="flex h-screen items-center justify-center bg-gray-900">
-            <div className="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-lg transition-all duration-300">
-                <h2 className={`text-3xl font-bold mb-6 text-center ${isLogin ? 'text-blue-400' : 'text-green-400'}`}>
-                    {isLogin ? 'Login' : 'Register'}
+        <div className="flex min-h-screen items-center justify-center bg-radial from-gray-800 via-gray-900 to-black p-4 relative overflow-hidden">
+            {/* Background blur elements */}
+            <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none animate-pulse"></div>
+            <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-600/10 rounded-full blur-[120px] pointer-events-none animate-pulse duration-5000"></div>
+
+            <div className="w-full max-w-md bg-white/5 backdrop-blur-xl p-8 rounded-2xl border border-white/10 shadow-[0_12px_40px_0_rgba(0,0,0,0.5)] transition-all duration-300 hover:border-white/15 relative z-10">
+                
+                {/* Branding/Logo */}
+                <div className="text-center mb-6">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-[0_0_20px_rgba(59,130,246,0.3)] mb-3">
+                        <span className="text-white text-2xl font-black tracking-tighter">S</span>
+                    </div>
+                    <h1 className="text-2xl font-black tracking-tight text-white">
+                        Synapse <span className="text-sm font-medium text-gray-400">v1.0</span>
+                    </h1>
+                    <p className="text-xs text-gray-400 mt-1">Real-time group collaboration & ephemeral streaming</p>
+                </div>
+
+                <h2 className={`text-xl font-bold mb-6 text-center tracking-wide ${isLogin ? 'text-blue-400' : 'text-emerald-400'}`}>
+                    {isLogin ? 'Welcome Back' : 'Create Account'}
                 </h2>
 
                 {/* --- SERVER STATUS INDICATORS --- */}
-                {/* YELLOW LIGHT: Waking up */}
                 {isWaking && (
-                    <div className="mb-6 flex items-center justify-center gap-2 text-yellow-500 bg-yellow-500/10 py-2 px-4 rounded-lg border border-yellow-500/20">
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                    <div className="mb-6 flex items-center justify-center gap-3 text-amber-400 bg-amber-500/10 py-2.5 px-4 rounded-xl border border-amber-500/20">
+                        <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
                         </span>
-                        <span className="text-sm font-semibold animate-pulse">Waking up secure server (~40s)...</span>
+                        <span className="text-xs font-bold animate-pulse">Waking up secure container... (~40s)</span>
                     </div>
                 )}
 
-                {/* GREEN LIGHT: Ready */}
                 {!isWaking && isServerReady && (
-                    <div className="mb-6 flex items-center justify-center gap-2 text-green-400 bg-green-400/10 py-2 px-4 rounded-lg border border-green-400/20">
-                        <span className="h-2 w-2 bg-green-400 rounded-full"></span>
-                        <span className="text-xs font-semibold uppercase tracking-wider">Server Online</span>
+                    <div className="mb-6 flex items-center justify-center gap-2 text-emerald-400 bg-emerald-500/10 py-2 px-4 rounded-xl border border-emerald-500/20">
+                        <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Secure Server Online</span>
                     </div>
                 )}
 
-                {/* RED LIGHT: Error + Retry Trigger */}
                 {!isWaking && serverError && (
-                    <div className="mb-6 flex flex-col items-center justify-center gap-2 text-red-400 bg-red-400/10 py-3 px-4 rounded-lg border border-red-400/20">
+                    <div className="mb-6 flex flex-col items-center justify-center gap-2 text-red-400 bg-red-500/10 py-3 px-4 rounded-xl border border-red-500/20">
                         <div className="flex items-center gap-2">
-                            <span className="h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>
-                            <span className="text-xs font-semibold uppercase tracking-wider">Server Offline / Error</span>
+                            <span className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                            <span className="text-[10px] font-black uppercase tracking-widest">Connection Failed</span>
                         </div>
                         <button 
                             onClick={pingServer}
                             type="button"
-                            className="mt-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs py-1.5 px-4 rounded transition font-bold"
+                            className="mt-1 bg-red-500/25 hover:bg-red-500/35 text-red-300 text-xs py-1.5 px-4 rounded-lg transition font-bold border border-red-500/30 active:scale-95"
                         >
                             Retry Connection
                         </button>
@@ -121,55 +121,64 @@ export default function Login() {
                 {/* --- LOGIN / REGISTER FORM --- */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-gray-300 mb-1">Username</label>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Username</label>
                         <input 
                             type="text" 
-                            className={`w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${isLogin ? 'focus:border-blue-500' : 'focus:border-green-500'}`}
+                            className={`w-full px-4 py-3 bg-gray-900/60 text-white rounded-xl border border-gray-700/50 focus:outline-none focus:ring-2 focus:ring-opacity-40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isLogin 
+                                ? 'focus:border-blue-500 focus:ring-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.15)]' 
+                                : 'focus:border-emerald-500 focus:ring-emerald-500 focus:shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                            }`}
                             value={username} 
                             onChange={(e) => setUsername(e.target.value)} 
                             disabled={isWaking || isSubmitting}
                             required 
+                            placeholder="username"
                         />
                     </div>
 
-                    {/* Email field ONLY shows when registering */}
                     {!isLogin && (
                         <div className="animate-fade-in">
-                            <label className="block text-gray-300 mb-1">Email</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Email</label>
                             <input 
                                 type="email" 
-                                className="w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-green-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full px-4 py-3 bg-gray-900/60 text-white rounded-xl border border-gray-700/50 focus:border-emerald-500 focus:ring-emerald-500 focus:ring-2 focus:ring-opacity-40 focus:outline-none focus:shadow-[0_0_15px_rgba(16,185,129,0.15)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                 value={email} 
                                 onChange={(e) => setEmail(e.target.value)} 
                                 disabled={isWaking || isSubmitting}
                                 required={!isLogin} 
+                                placeholder="name@domain.com"
                             />
                         </div>
                     )}
 
                     <div>
-                        <label className="block text-gray-300 mb-1">Password</label>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Password</label>
                         <input 
                             type="password" 
-                            className={`w-full p-2 bg-gray-700 text-white rounded border border-gray-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${isLogin ? 'focus:border-blue-500' : 'focus:border-green-500'}`}
+                            className={`w-full px-4 py-3 bg-gray-900/60 text-white rounded-xl border border-gray-700/50 focus:outline-none focus:ring-2 focus:ring-opacity-40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isLogin 
+                                ? 'focus:border-blue-500 focus:ring-blue-500 focus:shadow-[0_0_15px_rgba(59,130,246,0.15)]' 
+                                : 'focus:border-emerald-500 focus:ring-emerald-500 focus:shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                            }`}
                             value={password} 
                             onChange={(e) => setPassword(e.target.value)} 
                             disabled={isWaking || isSubmitting}
                             required 
+                            placeholder="••••••••"
                         />
                     </div>
 
                     <button 
                         type="submit" 
                         disabled={isWaking || isSubmitting || !username || !password || (!isLogin && !email)}
-                        className={`w-full font-bold py-2 px-4 rounded transition text-white flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        className={`w-full font-bold py-3 px-4 rounded-xl transition-all duration-200 text-white flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] ${
                             isLogin 
-                            ? 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800' 
-                            : 'bg-green-600 hover:bg-green-700 disabled:bg-green-800'
+                            ? 'bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 shadow-[0_4px_12px_rgba(59,130,246,0.2)]' 
+                            : 'bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 shadow-[0_4px_12px_rgba(16,185,129,0.2)]'
                         }`}
                     >
-                        {/* Dynamic Button Text */}
-                        {isWaking ? 'Please Wait...' : 
+                        {isWaking ? 'Verifying Host...' : 
                          isSubmitting ? (
                              <>
                                  <span className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
@@ -180,7 +189,7 @@ export default function Login() {
                     </button>
                 </form>
 
-                <p className="text-gray-400 mt-4 text-center cursor-pointer">
+                <p className="text-gray-400 mt-6 text-center text-sm">
                     {isLogin ? "Don't have an account? " : "Already have an account? "}
                     <button 
                         type="button"
@@ -190,7 +199,7 @@ export default function Login() {
                             setPassword('');
                             setEmail('');
                         }} 
-                        className={`hover:underline disabled:opacity-50 disabled:cursor-not-allowed ${isLogin ? 'text-blue-400' : 'text-green-400'}`}
+                        className={`hover:underline font-bold focus:outline-none transition ${isLogin ? 'text-blue-400 hover:text-blue-300' : 'text-emerald-400 hover:text-emerald-300'}`}
                         disabled={isWaking || isSubmitting}
                     >
                         {isLogin ? 'Register here' : 'Login here'}
@@ -199,4 +208,4 @@ export default function Login() {
             </div>
         </div>
     );
-}
+}

@@ -6,7 +6,8 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class ChatMessage {
-    private String message;
+    private String sender;
     private String content;
     private long timestamp;
 }
+

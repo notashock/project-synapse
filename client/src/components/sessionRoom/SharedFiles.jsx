@@ -75,11 +75,12 @@ export default function SharedFiles({ sessionData }) {
                                                 {(file.fileSize / 1024).toFixed(1)} KB
                                             </p>
                                         </div>
-                                        {isSender ? (
-                                            <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2 sm:px-3 py-1 ml-2 shrink-0 border border-gray-600 rounded bg-gray-800">Your File</span>
-                                        ) : (
-                                            <a href={file.url} download={file.fileName} className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded text-[10px] sm:text-xs font-bold transition shrink-0 ml-2 shadow">Download</a>
-                                        )}
+                                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                                            {isSender && (
+                                                <span className="text-[9px] sm:text-[10px] font-bold text-blue-400 uppercase tracking-wider px-2 py-1 border border-blue-500/20 rounded-lg bg-blue-500/10">Your File</span>
+                                            )}
+                                            <a href={file.url} download={file.fileName} className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition shadow-md active:scale-95">Download</a>
+                                        </div>
                                     </div>
                                 </div>
                             );
