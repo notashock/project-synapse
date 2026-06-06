@@ -2,6 +2,7 @@ import { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api'; 
+import { Zap, Server, ServerCrash, Loader, RefreshCw } from 'lucide-react';
 
 export default function Login() {
     const [isLogin, setIsLogin] = useState(true);
@@ -72,7 +73,7 @@ export default function Login() {
                 {/* Branding/Logo */}
                 <div className="text-center mb-6">
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-[0_0_20px_rgba(59,130,246,0.3)] mb-3">
-                        <span className="text-white text-2xl font-black tracking-tighter">S</span>
+                        <Zap className="w-6 h-6 text-white" />
                     </div>
                     <h1 className="text-2xl font-black tracking-tight text-white">
                         Synapse <span className="text-sm font-medium text-gray-400">v1.0</span>
@@ -87,17 +88,14 @@ export default function Login() {
                 {/* --- SERVER STATUS INDICATORS --- */}
                 {isWaking && (
                     <div className="mb-6 flex items-center justify-center gap-3 text-amber-400 bg-amber-500/10 py-2.5 px-4 rounded-xl border border-amber-500/20">
-                        <span className="relative flex h-2.5 w-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                        </span>
-                        <span className="text-xs font-bold animate-pulse">Waking up secure container... (~40s)</span>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        <span className="text-xs font-bold">Waking up secure container... (~40s)</span>
                     </div>
                 )}
 
                 {!isWaking && isServerReady && (
                     <div className="mb-6 flex items-center justify-center gap-2 text-emerald-400 bg-emerald-500/10 py-2 px-4 rounded-xl border border-emerald-500/20">
-                        <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                        <Server className="w-3.5 h-3.5" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Secure Server Online</span>
                     </div>
                 )}
@@ -105,14 +103,15 @@ export default function Login() {
                 {!isWaking && serverError && (
                     <div className="mb-6 flex flex-col items-center justify-center gap-2 text-red-400 bg-red-500/10 py-3 px-4 rounded-xl border border-red-500/20">
                         <div className="flex items-center gap-2">
-                            <span className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                            <ServerCrash className="w-4 h-4" />
                             <span className="text-[10px] font-black uppercase tracking-widest">Connection Failed</span>
                         </div>
                         <button 
                             onClick={pingServer}
                             type="button"
-                            className="mt-1 bg-red-500/25 hover:bg-red-500/35 text-red-300 text-xs py-1.5 px-4 rounded-lg transition font-bold border border-red-500/30 active:scale-95"
+                            className="mt-1 bg-red-500/25 hover:bg-red-500/35 text-red-300 text-xs py-1.5 px-4 rounded-lg transition font-bold border border-red-500/30 active:scale-95 flex items-center gap-1.5"
                         >
+                            <RefreshCw className="w-3 h-3" />
                             Retry Connection
                         </button>
                     </div>
@@ -181,7 +180,7 @@ export default function Login() {
                         {isWaking ? 'Verifying Host...' : 
                          isSubmitting ? (
                              <>
-                                 <span className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                                 <Loader className="w-4 h-4 animate-spin" />
                                  Processing...
                              </>
                          ) : 
@@ -208,4 +207,4 @@ export default function Login() {
             </div>
         </div>
     );
-}
+}

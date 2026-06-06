@@ -3,21 +3,21 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import { Plus, Radio, RefreshCw, Users, Trash2, ArrowRight } from 'lucide-react';
 
 export default function Dashboard() {
-    const { user, logout } = useContext(AuthContext);
+    const { user } = useContext(AuthContext);
     const navigate = useNavigate();
     
-    // Data & Loading States
     const [sessions, setSessions] = useState([]);
     const [sessionTitle, setSessionTitle] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
-    const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [joiningId, setJoiningId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
 
     const fetchSessions = async () => {
+        setIsLoading(true);
         try {
             const response = await api.get('/sessions/active');
             setSessions(response.data);
@@ -82,47 +82,18 @@ export default function Dashboard() {
         }
     };
 
-    const handleLogout = async () => {
-        if (isLoggingOut) return;
-        setIsLoggingOut(true);
-        try { await logout(navigate); } finally { setIsLoggingOut(false); }
-    };
-
     return (
-        <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-950 to-black text-white p-4 md:p-8 relative overflow-hidden">
+        <div className="min-h-[calc(100dvh-53px)] bg-gradient-to-b from-gray-900 via-gray-950 to-black text-white p-4 md:p-8 relative overflow-hidden">
             {/* Background glowing effects */}
             <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
             <div className="absolute bottom-10 left-1/4 w-96 h-96 bg-purple-600/5 rounded-full blur-[120px] pointer-events-none"></div>
-
-            {/* RESPONSIVE HEADER */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 pb-6 border-b border-white/10 relative z-10">
-                <div>
-                    <div className="flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-sm">S</span>
-                        <h1 className="text-xl md:text-2xl font-black tracking-tight bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">
-                            Placement Hub
-                        </h1>
-                    </div>
-                    <p className="text-gray-400 text-xs md:text-sm mt-1.5">
-                        Logged in as: <span className="text-blue-400 font-semibold">@{user?.username}</span>
-                    </p>
-                </div>
-                
-                <button 
-                    onClick={handleLogout} 
-                    disabled={isLoggingOut}
-                    className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 disabled:bg-red-950 disabled:opacity-50 text-red-200 px-5 py-2 rounded-xl transition duration-200 flex items-center gap-2 w-full sm:w-auto justify-center font-bold text-xs uppercase tracking-wider active:scale-95 shadow-[0_4px_12px_rgba(239,68,68,0.1)]"
-                >
-                    {isLoggingOut ? 'Logging out...' : 'Logout'}
-                </button>
-            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 relative z-10">
                 {/* CREATE SESSION FORM */}
                 <div className="lg:col-span-1 order-first lg:order-none">
                     <div className="bg-white/5 backdrop-blur-md p-5 md:p-6 rounded-2xl border border-white/10 shadow-xl">
-                        <h2 className="text-base font-bold mb-4 text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                        <h2 className="text-sm font-bold mb-4 text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                            <Plus className="w-4 h-4 text-blue-400" />
                             Start New Session
                         </h2>
                         <form onSubmit={handleCreateSession} className="space-y-4">
@@ -141,8 +112,9 @@ export default function Dashboard() {
                             <button 
                                 type="submit" 
                                 disabled={isCreating || !sessionTitle.trim()}
-                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold py-3 px-4 rounded-xl transition active:scale-[0.98] shadow-lg shadow-blue-600/20 text-sm"
+                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold py-3 px-4 rounded-xl transition active:scale-[0.98] shadow-lg shadow-blue-600/20 text-sm flex items-center justify-center gap-2"
                             >
+                                <Plus className="w-4 h-4" />
                                 {isCreating ? 'Creating...' : 'Create Session'}
                             </button>
                         </form>
@@ -151,10 +123,20 @@ export default function Dashboard() {
 
                 {/* LIVE SESSIONS GRID */}
                 <div className="lg:col-span-2">
-                    <h2 className="text-base font-bold mb-4 text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Active Rooms
-                    </h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                            <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                            Active Rooms
+                        </h2>
+                        <button 
+                            onClick={fetchSessions}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white transition duration-200 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider active:scale-95 cursor-pointer"
+                            title="Reload active sessions"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Reload
+                        </button>
+                    </div>
                     
                     {isLoading ? (
                         <div className="flex justify-center items-center h-32 bg-white/5 rounded-2xl border border-white/10">
@@ -171,7 +153,8 @@ export default function Dashboard() {
                                 <div key={session.sessionId} className="bg-white/5 p-5 rounded-2xl border border-white/10 shadow-lg flex flex-col justify-between hover:border-white/20 transition-all duration-300 group">
                                     <div>
                                         <h3 className="text-md font-bold text-gray-100 truncate group-hover:text-blue-400 transition duration-200">{session.sessionTitle}</h3>
-                                        <p className="text-xs text-gray-400 mt-1">
+                                        <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
+                                            <Users className="w-3 h-3" />
                                             Host: <span className="text-gray-300 font-semibold">@{session.trainerUsername}</span>
                                         </p>
                                         
@@ -189,8 +172,9 @@ export default function Dashboard() {
                                         <button 
                                             onClick={() => handleJoinSession(session)}
                                             disabled={joiningId === session.sessionId || deletingId === session.sessionId}
-                                            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white py-2 px-3 rounded-xl font-bold transition text-xs active:scale-[0.98]"
+                                            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 text-white py-2 px-3 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center justify-center gap-1.5"
                                         >
+                                            <ArrowRight className="w-3.5 h-3.5" />
                                             {joiningId === session.sessionId ? 'Joining...' : 'Join Workspace'}
                                         </button>
                                         
@@ -198,8 +182,9 @@ export default function Dashboard() {
                                             <button 
                                                 onClick={() => handleDeleteSession(session.sessionId)}
                                                 disabled={deletingId === session.sessionId || joiningId === session.sessionId}
-                                                className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 disabled:bg-gray-850 disabled:opacity-50 text-red-400 py-2 px-4 rounded-xl font-bold transition text-xs active:scale-[0.98]"
+                                                className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 disabled:bg-gray-850 disabled:opacity-50 text-red-400 py-2 px-4 rounded-xl font-bold transition text-xs active:scale-[0.98] flex items-center gap-1.5"
                                             >
+                                                <Trash2 className="w-3.5 h-3.5" />
                                                 {deletingId === session.sessionId ? 'Ending...' : 'End'}
                                             </button>
                                         )}
