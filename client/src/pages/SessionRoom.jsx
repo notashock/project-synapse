@@ -42,7 +42,7 @@ export default function SessionRoom() {
     const sessionData = useSessionRoom(
         sessionId, 
         navigate, 
-        sessionMeta?.isLocal, 
+        sessionMeta?.isLocal ?? sessionMeta?.local, 
         sessionMeta?.trainerUsername || sessionMeta?.trainer
     );
 
@@ -68,7 +68,7 @@ export default function SessionRoom() {
     ]);
 
     useEffect(() => {
-        if (!loading && !loadingMeta && !user && !sessionMeta?.isLocal) {
+        if (!loading && !loadingMeta && !user && !(sessionMeta?.isLocal ?? sessionMeta?.local)) {
             navigate('/login');
         }
     }, [user, loading, loadingMeta, navigate, sessionMeta]);
@@ -81,7 +81,7 @@ export default function SessionRoom() {
         );
     }
 
-    if (!user && !sessionMeta?.isLocal) {
+    if (!user && !(sessionMeta?.isLocal ?? sessionMeta?.local)) {
         return null;
     }
 

@@ -12,5 +12,6 @@ public class SessionResponse {
     private String joinCode;
     private String sessionTitle;
     private String trainerUsername;
+    @com.fasterxml.jackson.annotation.JsonProperty("isLocal")
     private boolean isLocal;
 }

@@ -103,7 +103,7 @@ export default function Dashboard() {
                     joinCode: session.joinCode, 
                     trainer: session.trainerUsername,
                     sessionTitle: session.sessionTitle,
-                    isLocal: session.isLocal
+                    isLocal: session.isLocal ?? session.local
                 } 
             });
         } catch (error) {
@@ -137,7 +137,7 @@ export default function Dashboard() {
                     joinCode: session.joinCode,
                     trainer: session.trainerUsername,
                     sessionTitle: session.sessionTitle,
-                    isLocal: session.isLocal
+                    isLocal: session.isLocal ?? session.local
                 }
             });
         } catch (error) {
@@ -273,7 +273,7 @@ export default function Dashboard() {
                                             <div key={session.sessionId} className="bg-white/5 p-5 rounded-2xl border border-white/10 shadow-lg flex flex-col justify-between hover:border-white/20 transition-all duration-300 group">
                                                 <div>
                                                     <h3 className="text-md font-bold text-gray-100 truncate group-hover:text-blue-400 transition duration-200 flex items-center gap-2">
-                                                        {session.isLocal ? <Wifi className="w-4 h-4 text-blue-400" title="Local Network Session" /> : <Globe className="w-4 h-4 text-emerald-400" title="Cloud Session" />}
+                                                        {(session.isLocal ?? session.local) ? <Wifi className="w-4 h-4 text-blue-400" title="Local Network Session" /> : <Globe className="w-4 h-4 text-emerald-400" title="Cloud Session" />}
                                                         {session.sessionTitle}
                                                     </h3>
                                                     <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">

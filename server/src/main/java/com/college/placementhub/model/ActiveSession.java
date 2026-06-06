@@ -14,6 +14,7 @@ public class ActiveSession {
     private String trainerUsername;
     private String joinCode;
     private long createdAt;
+    @com.fasterxml.jackson.annotation.JsonProperty("isLocal")
     private boolean isLocal;
     private Set<String> participants;
     public ActiveSession(String sessionId, String sessionTitle, String trainerUsername, String joinCode, long createdAt, boolean isLocal) {
