@@ -66,6 +66,57 @@ public class FileStreamController {
         }
     }
 
+    @MessageMapping("/session/{sessionId}/register-owner")
+    public void registerOwner(
+            @DestinationVariable String sessionId,
+            @Payload java.util.Map<String, Object> payload,
+            SimpMessageHeaderAccessor headerAccessor
+    ) {
+        Session session = sessionService.getSessionDetails(sessionId);
+        if (session != null) {
+            String username = (String) payload.get("username");
+            String fileId = (String) payload.get("fileId");
+            String fileName = (String) payload.get("fileName");
+            String fileType = (String) payload.get("fileType");
+            Object sizeObj = payload.get("fileSize");
+            long fileSize = sizeObj instanceof Number ? ((Number) sizeObj).longValue() : 0L;
+            Object chunksObj = payload.get("totalChunks");
+            int totalChunks = chunksObj instanceof Number ? ((Number) chunksObj).intValue() : 0;
+            String status = (String) payload.get("status");
+            if (status == null) status = "COMPLETE";
+
+            sessionService.registerOwnership(sessionId, fileId, username, status, totalChunks);
+            
+            if ("COMPLETE".equals(status)) {
+                sessionService.triggerReplication(sessionId, fileId, fileName, fileSize, fileType, totalChunks);
+            }
+        }
+    }
+
+    @MessageMapping("/session/{sessionId}/sync-ownership")
+    public void syncOwnership(
+            @DestinationVariable String sessionId,
+            @Payload java.util.Map<String, Object> payload,
+            SimpMessageHeaderAccessor headerAccessor
+    ) {
+        Session session = sessionService.getSessionDetails(sessionId);
+        if (session != null) {
+            String username = (String) payload.get("username");
+            Object filesObj = payload.get("files");
+            if (filesObj instanceof java.util.List) {
+                for (Object fileObj : (java.util.List<?>) filesObj) {
+                    if (fileObj instanceof java.util.Map) {
+                        java.util.Map<?, ?> fileMap = (java.util.Map<?, ?>) fileObj;
+                        String fileId = (String) fileMap.get("fileId");
+                        Object chunksObj = fileMap.get("totalChunks");
+                        int totalChunks = chunksObj instanceof Number ? ((Number) chunksObj).intValue() : 0;
+                        sessionService.registerOwnership(sessionId, fileId, username, "COMPLETE", totalChunks);
+                    }
+                }
+            }
+        }
+    }
+
     @MessageMapping("/session/{sessionId}/transfer-request")
     public void requestTransfer(
             @DestinationVariable String sessionId,
@@ -94,10 +145,18 @@ public class FileStreamController {
                         Object startChunkObj = reqMap.get("startChunkIndex");
                         Integer startChunkIndex = startChunkObj instanceof Number ? ((Number) startChunkObj).intValue() : 0;
 
+                        // Content-Aware Routing: Find best owner
+                        String bestOwner = sessionService.getBestOwner(sessionId, fileId, java.util.Collections.singleton(requester));
+                        String targetSender = bestOwner != null ? bestOwner : sender;
+                        
+                        log.info("[ROUTING] Transfer request for file {} by {}. Target mapped from {} to best owner {}", fileId, requester, sender, targetSender);
+                        sessionService.incrementUploadLoad(sessionId, fileId, targetSender);
+
                         // Broadcast the transfer command to the targeted sender's user-specific topic
-                        template.convertAndSend("/topic/session/" + sessionId + "/transfer-commands/" + sender, Map.of(
+                        template.convertAndSend("/topic/session/" + sessionId + "/transfer-commands/" + targetSender, Map.of(
                                 "type", "TRANSFER_REQUEST",
-                                "sender", sender,
+                                "sender", sender, // Keep original sender for UI metadata mapping
+                                "routedSender", targetSender, // The peer who will actually send it
                                 "fileId", fileId,
                                 "startChunkIndex", startChunkIndex,
                                 "requester", requester != null ? requester : "Unknown",

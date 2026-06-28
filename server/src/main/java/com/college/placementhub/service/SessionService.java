@@ -39,6 +39,9 @@ public class SessionService {
     // Tracks active file transfers (sessionId -> Set of active transfers)
     private final Map<String, java.util.Set<ActiveTransfer>> activeTransferEdges = new ConcurrentHashMap<>();
 
+    // Tracks file ownership (sessionId -> (fileId -> (username -> FileOwnership)))
+    private final Map<String, Map<String, Map<String, com.college.placementhub.model.FileOwnership>>> ownershipRegistry = new ConcurrentHashMap<>();
+
     public static record ActiveTransfer(
         String sessionId,
         String fileId,
@@ -713,5 +716,115 @@ public class SessionService {
             }
         }
         template.convertAndSend("/topic/session/" + sessionId + "/path-verified/" + sender, response);
+    }
+
+    // --- Phase: Content-Aware Distributed Mesh ---
+
+    public void registerOwnership(String sessionId, String fileId, String username, String status, int completedChunks) {
+        Map<String, Map<String, com.college.placementhub.model.FileOwnership>> sessionRegistry = ownershipRegistry.computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>());
+        Map<String, com.college.placementhub.model.FileOwnership> fileRegistry = sessionRegistry.computeIfAbsent(fileId, k -> new ConcurrentHashMap<>());
+        
+        com.college.placementhub.model.FileOwnership ownership = fileRegistry.computeIfAbsent(username, k -> new com.college.placementhub.model.FileOwnership(username, status, completedChunks, System.currentTimeMillis(), 0));
+        ownership.setTransferStatus(status);
+        ownership.setCompletedChunks(completedChunks);
+        ownership.setLastSeen(System.currentTimeMillis());
+        
+        log.info("[OWNERSHIP_REGISTRY] User {} registered as {} owner of file {} in session {}", username, status, fileId, sessionId);
+    }
+
+    public String getBestOwner(String sessionId, String fileId, java.util.Set<String> excludePeers) {
+        Map<String, Map<String, com.college.placementhub.model.FileOwnership>> sessionRegistry = ownershipRegistry.get(sessionId);
+        if (sessionRegistry == null) return null;
+        
+        Map<String, com.college.placementhub.model.FileOwnership> fileRegistry = sessionRegistry.get(fileId);
+        if (fileRegistry == null) return null;
+
+        Map<String, String> userSockets = sessionUserSockets.get(sessionId);
+        if (userSockets == null) return null;
+
+        String bestOwner = null;
+        int minLoad = Integer.MAX_VALUE;
+
+        for (Map.Entry<String, com.college.placementhub.model.FileOwnership> entry : fileRegistry.entrySet()) {
+            String owner = entry.getKey();
+            com.college.placementhub.model.FileOwnership ownership = entry.getValue();
+
+            if ("COMPLETE".equals(ownership.getTransferStatus()) &&
+                userSockets.containsKey(owner) &&
+                (excludePeers == null || !excludePeers.contains(owner))) {
+                
+                if (ownership.getUploadLoad() < minLoad) {
+                    minLoad = ownership.getUploadLoad();
+                    bestOwner = owner;
+                }
+            }
+        }
+        return bestOwner;
+    }
+
+    public void incrementUploadLoad(String sessionId, String fileId, String username) {
+        try {
+            ownershipRegistry.get(sessionId).get(fileId).get(username).setUploadLoad(
+                ownershipRegistry.get(sessionId).get(fileId).get(username).getUploadLoad() + 1
+            );
+        } catch (Exception e) {}
+    }
+
+    public void decrementUploadLoad(String sessionId, String fileId, String username) {
+        try {
+            int currentLoad = ownershipRegistry.get(sessionId).get(fileId).get(username).getUploadLoad();
+            if (currentLoad > 0) {
+                ownershipRegistry.get(sessionId).get(fileId).get(username).setUploadLoad(currentLoad - 1);
+            }
+        } catch (Exception e) {}
+    }
+
+    public void triggerReplication(String sessionId, String fileId, String fileName, long fileSize, String fileType, int totalChunks) {
+        int RF = 3; // Configurable Replication Factor
+        
+        Map<String, Map<String, com.college.placementhub.model.FileOwnership>> sessionRegistry = ownershipRegistry.get(sessionId);
+        if (sessionRegistry == null) return;
+        Map<String, com.college.placementhub.model.FileOwnership> fileRegistry = sessionRegistry.get(fileId);
+        if (fileRegistry == null) return;
+
+        Map<String, String> userSockets = sessionUserSockets.get(sessionId);
+        if (userSockets == null || userSockets.size() <= 1) return;
+
+        int currentReplicaCount = 0;
+        java.util.Set<String> currentOwners = new java.util.HashSet<>();
+        
+        for (Map.Entry<String, com.college.placementhub.model.FileOwnership> entry : fileRegistry.entrySet()) {
+            if ("COMPLETE".equals(entry.getValue().getTransferStatus()) && userSockets.containsKey(entry.getKey())) {
+                currentReplicaCount++;
+                currentOwners.add(entry.getKey());
+            }
+        }
+
+        if (currentReplicaCount < RF) {
+            int deficit = RF - currentReplicaCount;
+            log.info("[REPLICATION] File {} has {}/{} replicas. Deficit: {}", fileId, currentReplicaCount, RF, deficit);
+
+            java.util.List<String> availablePeers = new java.util.ArrayList<>(userSockets.keySet());
+            availablePeers.removeAll(currentOwners);
+            java.util.Collections.shuffle(availablePeers);
+
+            int replicationsTriggered = 0;
+            for (String targetPeer : availablePeers) {
+                if (replicationsTriggered >= deficit) break;
+
+                Map<String, Object> replicatePayload = new java.util.HashMap<>();
+                replicatePayload.put("type", "REPLICATE_REQUEST");
+                replicatePayload.put("fileId", fileId);
+                replicatePayload.put("fileName", fileName);
+                replicatePayload.put("fileSize", fileSize);
+                replicatePayload.put("fileType", fileType);
+                replicatePayload.put("totalChunks", totalChunks);
+                replicatePayload.put("targetPeer", targetPeer);
+
+                template.convertAndSend("/topic/session/" + sessionId + "/transfer-commands/" + targetPeer, replicatePayload);
+                log.info("[REPLICATION] Issued REPLICATE_REQUEST to {} for file {}", targetPeer, fileId);
+                replicationsTriggered++;
+            }
+        }
     }
 }
