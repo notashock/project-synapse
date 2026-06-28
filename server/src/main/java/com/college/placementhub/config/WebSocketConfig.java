@@ -34,6 +34,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.setSendTimeLimit(20000);
     }
     @Override
+    public void configureClientInboundChannel(ChannelRegistration registration){
+        registration.interceptors(senderBypassInterceptor);
+    }
+    @Override
     public void configureClientOutboundChannel(ChannelRegistration registration){
         registration.interceptors(senderBypassInterceptor);
     }
