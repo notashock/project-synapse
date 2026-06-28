@@ -1,6 +1,6 @@
 package com.college.placementhub.controller;
 
-import com.college.placementhub.model.ActiveSession;
+import com.college.placementhub.model.Session;
 import com.college.placementhub.service.SessionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -22,7 +22,7 @@ public class LiveChatController {
             @Payload ChatMessagePayload payload,
             SimpMessageHeaderAccessor headerAccessor
     ) {
-        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        Session session = sessionService.getSessionDetails(sessionId);
         if (session != null) {
             if (!session.isLocal() && headerAccessor.getUser() == null) {
                 return; // Block unauthenticated chat on cloud sessions

@@ -2,7 +2,7 @@ package com.college.placementhub.controller;
 
 import com.college.placementhub.dto.FileStreamMessage;
 import com.college.placementhub.model.SharedFile;
-import com.college.placementhub.model.ActiveSession;
+import com.college.placementhub.model.Session;
 import com.college.placementhub.repository.SharedFileRepository;
 import com.college.placementhub.service.SessionService;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,7 @@ public class FileStreamController {
             @Payload FileStreamMessage message,
             SimpMessageHeaderAccessor headerAccessor // 1. Inject the accessor
     ) {
-        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        Session session = sessionService.getSessionDetails(sessionId);
         if (session != null) {
             if (!session.isLocal() && headerAccessor.getUser() == null) {
                 log.warn("Blocked file transfer: Unauthenticated user attempted to stream to cloud session {}.", sessionId);
@@ -63,6 +63,51 @@ public class FileStreamController {
 
         } else {
             log.warn("Blocked file transfer: Session {} is inactive.", sessionId);
+        }
+    }
+
+    @MessageMapping("/session/{sessionId}/transfer-request")
+    public void requestTransfer(
+            @DestinationVariable String sessionId,
+            @Payload java.util.Map<String, Object> payload,
+            SimpMessageHeaderAccessor headerAccessor
+    ) {
+        Session session = sessionService.getSessionDetails(sessionId);
+        if (session != null) {
+            if (!session.isLocal() && headerAccessor.getUser() == null) {
+                log.warn("Blocked transfer request: Unauthenticated user in cloud session {}.", sessionId);
+                return;
+            }
+
+            // Extract the requests list and requester from the payload
+            Object requestsObj = payload.get("requests");
+            String requester = (String) payload.get("requester");
+            String targetSocketId = headerAccessor.getSessionId();
+
+            if (requestsObj instanceof java.util.List) {
+                java.util.List<?> requests = (java.util.List<?>) requestsObj;
+                for (Object reqObj : requests) {
+                    if (reqObj instanceof java.util.Map) {
+                        java.util.Map<?, ?> reqMap = (java.util.Map<?, ?>) reqObj;
+                        String fileId = (String) reqMap.get("fileId");
+                        String sender = (String) reqMap.get("sender");
+                        Object startChunkObj = reqMap.get("startChunkIndex");
+                        Integer startChunkIndex = startChunkObj instanceof Number ? ((Number) startChunkObj).intValue() : 0;
+
+                        // Broadcast the transfer command to the targeted sender's user-specific topic
+                        template.convertAndSend("/topic/session/" + sessionId + "/transfer-commands/" + sender, Map.of(
+                                "type", "TRANSFER_REQUEST",
+                                "sender", sender,
+                                "fileId", fileId,
+                                "startChunkIndex", startChunkIndex,
+                                "requester", requester != null ? requester : "Unknown",
+                                "targetSocketId", targetSocketId != null ? targetSocketId : ""
+                        ));
+                    }
+                }
+            }
+        } else {
+            log.warn("Blocked transfer request: Session {} is inactive.", sessionId);
         }
     }
 }

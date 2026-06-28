@@ -3,7 +3,7 @@ package com.college.placementhub.controller;
 import com.college.placementhub.dto.JoinRequest;
 import com.college.placementhub.dto.SessionRequest;
 import com.college.placementhub.dto.SessionResponse;
-import com.college.placementhub.model.ActiveSession;
+import com.college.placementhub.model.Session;
 import com.college.placementhub.security.UserDetailsImpl;
 import com.college.placementhub.service.SessionService;
 import com.college.placementhub.repository.SharedFileRepository;
@@ -20,6 +20,7 @@ public class SessionController {
 
     private final SessionService sessionService;
     private final SharedFileRepository sharedFileRepository;
+    private final com.college.placementhub.repository.TransferRequestRepository transferRequestRepository;
 
     @PostMapping("/create")
     public ResponseEntity<?> startSession(
@@ -33,13 +34,14 @@ public class SessionController {
         if (username == null || username.trim().isEmpty()) {
             return ResponseEntity.badRequest().body("Username or Guest Username is required.");
         }
-        ActiveSession session = sessionService.createSession(username, request.getSessionTitle(), request.isLocal());
+        Session session = sessionService.createSession(username, request.getSessionTitle(), request.isLocal());
         return ResponseEntity.ok(new SessionResponse(
                 session.getSessionId(),
                 session.getJoinCode(),
                 session.getSessionTitle(),
-                session.getTrainerUsername(),
-                session.isLocal()
+                session.getHostUsername(),
+                session.isLocal(),
+                session.getParticipants()
         ));
     }
 
@@ -52,7 +54,12 @@ public class SessionController {
         if (payload.joinCode() == null || payload.joinCode().trim().isEmpty()) {
             return ResponseEntity.badRequest().body("Join code is required.");
         }
-        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        Session session;
+        try {
+            session = sessionService.getSessionDetails(sessionId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.GONE).body(e.getMessage());
+        }
         if (session == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
         }
@@ -81,7 +88,12 @@ public class SessionController {
             @RequestParam(required = false) String guestUsername,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
-        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        Session session;
+        try {
+            session = sessionService.getSessionDetails(sessionId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.GONE).body(e.getMessage());
+        }
         if (session == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
         }
@@ -91,6 +103,7 @@ public class SessionController {
         String username = userDetails != null ? userDetails.getUsername() : guestUsername;
         if (username != null) {
             sessionService.leaveSession(sessionId, username);
+            sharedFileRepository.deleteBySessionIdAndSender(sessionId, username);
         }
         return ResponseEntity.ok("Successfully left the session.");
     }
@@ -105,7 +118,12 @@ public class SessionController {
             @PathVariable String sessionId,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
-        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        Session session;
+        try {
+            session = sessionService.getSessionDetails(sessionId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.GONE).body(e.getMessage());
+        }
         if (session == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
         }
@@ -116,8 +134,9 @@ public class SessionController {
                 session.getSessionId(),
                 session.getJoinCode(),
                 session.getSessionTitle(),
-                session.getTrainerUsername(),
-                session.isLocal()
+                session.getHostUsername(),
+                session.isLocal(),
+                session.getParticipants()
         ));
     }
 
@@ -126,7 +145,12 @@ public class SessionController {
             @PathVariable String joinCode,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
-        ActiveSession session = sessionService.getSessionByJoinCode(joinCode);
+        Session session;
+        try {
+            session = sessionService.getSessionByJoinCode(joinCode);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.GONE).body(e.getMessage());
+        }
         if (session == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
         }
@@ -137,8 +161,9 @@ public class SessionController {
                 session.getSessionId(),
                 session.getJoinCode(),
                 session.getSessionTitle(),
-                session.getTrainerUsername(),
-                session.isLocal()
+                session.getHostUsername(),
+                session.isLocal(),
+                session.getParticipants()
         ));
     }
 
@@ -147,7 +172,12 @@ public class SessionController {
             @PathVariable String sessionId,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
-        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        Session session;
+        try {
+            session = sessionService.getSessionDetails(sessionId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.GONE).body(e.getMessage());
+        }
         if (session == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
         }
@@ -163,7 +193,12 @@ public class SessionController {
             @RequestParam(required = false) String guestUsername,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
-        ActiveSession session = sessionService.getSessionDetails(sessionId);
+        Session session;
+        try {
+            session = sessionService.getSessionDetails(sessionId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.GONE).body(e.getMessage());
+        }
         if (session == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: Session not found.");
         }
@@ -183,4 +218,14 @@ public class SessionController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Error: " + e.getMessage());
         }
     }
+
+    @lombok.Data
+    public static class FileTransferRequestPayload {
+        private String fileId;
+        private String sender;
+    }
+
+
+
+    // WebSockets handle file transfer requests and commands.
 }
