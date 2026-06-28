@@ -986,7 +986,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                 // Reconstruct File reference from local IndexedDB if we are the sender
                 const localMetadata = await db.getFileMetadata(data.fileId);
                 const localBlobInfo = await db.getFileBlob(data.fileId);
-                if (localMetadata && localBlobInfo && localBlobInfo.blob && localMetadata.sender === currentUser) {
+                if (localMetadata && localBlobInfo && localBlobInfo.blob && localMetadata.status === 'completed') {
                     activeUploadsRef.current[data.fileId] = {
                         file: new File([localBlobInfo.blob], localMetadata.fileName, { type: localMetadata.fileType }),
                         aborted: false,
@@ -1121,6 +1121,20 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                                 if (prev.some(f => f.fileId === metadata.fileId)) return prev;
                                 return [...prev, { ...metadata, url: fileUrl }];
                             });
+                            
+                            // Trigger Content-Aware Mesh Replication
+                            if (stompClientRef.current && stompClientRef.current.connected) {
+                                stompClientRef.current.send(`/app/session/${sessionId}/register-owner`, {}, JSON.stringify({
+                                    username: currentUser,
+                                    fileId: metadata.fileId,
+                                    fileName: metadata.fileName,
+                                    fileType: metadata.fileType,
+                                    fileSize: metadata.fileSize,
+                                    totalChunks: metadata.totalChunks,
+                                    status: "COMPLETE"
+                                }));
+                            }
+
                             toast.success(`Ready: ${metadata.fileName}`);
                         } catch (e) {
                             console.error("Assembly error", e);
@@ -1205,6 +1219,20 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                         if (prev.some(f => f.fileId === metadata.fileId)) return prev;
                         return [...prev, { ...metadata, url: fileUrl }];
                     });
+                    
+                    // Trigger Content-Aware Mesh Replication
+                    if (stompClientRef.current && stompClientRef.current.connected) {
+                        stompClientRef.current.send(`/app/session/${sessionId}/register-owner`, {}, JSON.stringify({
+                            username: currentUser,
+                            fileId: metadata.fileId,
+                            fileName: metadata.fileName,
+                            fileType: metadata.fileType,
+                            fileSize: metadata.fileSize,
+                            totalChunks: metadata.totalChunks,
+                            status: "COMPLETE"
+                        }));
+                    }
+
                     toast.success(`Ready: ${metadata.fileName}`);
                 } catch (e) {
                     console.error("Assembly error", e);
@@ -1307,6 +1335,16 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                     setTimeout(() => {
                         if (isMounted && syncFilesWithServerRef.current) syncFilesWithServerRef.current(stompClient, "WebSocket initialization connect()");
                     }, 500);
+
+                    // Synchronize File Ownership for Content-Aware Mesh
+                    db.getAllFilesMetadata().then(files => {
+                        if (isMounted && stompClient.connected) {
+                            stompClient.send(`/app/session/${sessionId}/sync-ownership`, {}, JSON.stringify({
+                                username: currentUser,
+                                files: files.map(f => ({ fileId: f.fileId, totalChunks: f.totalChunks }))
+                            }));
+                        }
+                    });
 
                     // 1. Presence Listener
                     stompClient.subscribe(`/topic/session/${sessionId}/presence`, (message) => {
@@ -1455,7 +1493,18 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                     stompClient.subscribe(`/topic/session/${sessionId}/transfer-commands/${currentUser}`, async (message) => {
                         const cmd = JSON.parse(message.body);
                         console.log("[RTC_TRACE] Received transfer command signal:", { cmd, meta: getTransferDiagnosticMeta() });
-                        if (cmd.type === 'TRANSFER_REQUEST' && cmd.sender === currentUser) {
+                        
+                        if (cmd.type === 'REPLICATE_REQUEST') {
+                            console.log(`[REPLICATION] Received REPLICATE_REQUEST for file ${cmd.fileId}`);
+                            initiateTransferRequest([{
+                                fileId: cmd.fileId,
+                                sender: "ReplicationSystem", // Logic will map to best owner anyway
+                                startChunkIndex: 0
+                            }]);
+                            return;
+                        }
+
+                        if (cmd.type === 'TRANSFER_REQUEST' && (cmd.sender === currentUser || cmd.routedSender === currentUser)) {
                             const transferKey = `${cmd.fileId}_${cmd.requester}`;
                             if (activeUploadKeysRef.current.has(transferKey)) {
                                 console.log(`[RTC_TRACE] Duplicate TRANSFER_REQUEST ignored for key: ${transferKey}`);
@@ -1472,7 +1521,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                                 // Reconstruct File reference from local IndexedDB if missing (e.g. after page reload)
                                 const localMetadata = await db.getFileMetadata(cmd.fileId);
                                 const localBlobInfo = await db.getFileBlob(cmd.fileId);
-                                if (localMetadata && localBlobInfo && localBlobInfo.blob && localMetadata.sender === currentUser) {
+                                if (localMetadata && localBlobInfo && localBlobInfo.blob && localMetadata.status === 'completed') {
                                     activeUploadsRef.current[cmd.fileId] = {
                                         file: new File([localBlobInfo.blob], localMetadata.fileName, { type: localMetadata.fileType }),
                                         aborted: false,
@@ -1640,7 +1689,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                             activeTransfersRef.current.add(activity.fileId);
                         } else if (activity.type === 'END') {
                             activeTransfersRef.current.delete(activity.fileId);
-                            if (incomingTransfers[activity.fileId]) {
+                            if (incomingTransfersRef.current[activity.fileId]) {
                                 activeDownloadCountRef.current = 0;
                                 setTransferStatuses(prev => {
                                     const next = { ...prev };
@@ -2048,6 +2097,17 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
         // 1. Always save metadata to DB by sending START via STOMP
         if (stompClientRef.current && stompClientRef.current.connected) {
             stompClientRef.current.send(`/app/session/${sessionId}/stream`, {}, JSON.stringify({ type: 'START', ...metadata }));
+
+            // Trigger Content-Aware Mesh Replication
+            stompClientRef.current.send(`/app/session/${sessionId}/register-owner`, {}, JSON.stringify({
+                username: currentUser,
+                fileId: metadata.fileId,
+                fileName: metadata.fileName,
+                fileType: metadata.fileType,
+                fileSize: metadata.fileSize,
+                totalChunks: metadata.totalChunks,
+                status: "COMPLETE"
+            }));
         }
 
         // 2. Also broadcast START via WebRTC if we are in WebRTC mode

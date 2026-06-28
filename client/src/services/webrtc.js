@@ -640,7 +640,7 @@ export class WebRTCManager {
     }
 
     sendDataToPeer(targetUsername, data) {
-        const isBinary = data instanceof ArrayBuffer;
+        const isBinary = data instanceof ArrayBuffer || data instanceof Uint8Array || data instanceof Blob;
         if (isBinary) {
             // Unpack header to read routing metadata
             let nextHop = targetUsername;
@@ -669,7 +669,7 @@ export class WebRTCManager {
             }
             
             const dc = this.dataChannels[nextHop];
-            const payloadSize = data.byteLength;
+            const payloadSize = data.byteLength || data.size || 0;
             console.log(`[RTC_TRACE] Attempting to send binary chunk to next hop ${nextHop}. Channel state: ${dc ? dc.readyState : 'missing'}. Payload size: ${payloadSize} bytes.`);
             
             if (!dc || dc.readyState !== 'open') {
