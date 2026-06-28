@@ -105,7 +105,20 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
         }
         
         // Find and abort any active uploads for this key
-        const uploadKeys = [fileId, `${fileId}_${requester}`];
+        let hasRemaining = false;
+        for (const key of activeUploadKeysRef.current) {
+            if (key !== transferKey && key.startsWith(`${fileId}_`)) {
+                hasRemaining = true;
+                break;
+            }
+        }
+        const hasQueued = uploadQueueRef.current.some(q => q.fileId === fileId);
+
+        const uploadKeys = [`${fileId}_${requester}`];
+        if (!hasRemaining && !hasQueued) {
+            uploadKeys.push(fileId);
+        }
+
         uploadKeys.forEach(k => {
             const uploadObj = activeUploadsRef.current[k];
             if (uploadObj) {
@@ -440,7 +453,20 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
         let uploadObj = activeUploadsRef.current[uploadKey];
 
         if (!uploadObj) {
-            const baseUpload = activeUploadsRef.current[fileId];
+            let baseUpload = activeUploadsRef.current[fileId];
+            if (!baseUpload) {
+                // Recover dynamically from local IndexedDB if missing in cache
+                const localMetadata = await db.getFileMetadata(fileId);
+                const localBlobInfo = await db.getFileBlob(fileId);
+                if (localMetadata && localBlobInfo && localBlobInfo.blob && localMetadata.status === 'completed') {
+                    baseUpload = {
+                        file: new File([localBlobInfo.blob], localMetadata.fileName, { type: localMetadata.fileType }),
+                        aborted: false,
+                        reader: null
+                    };
+                    activeUploadsRef.current[fileId] = baseUpload;
+                }
+            }
             if (!baseUpload) return;
             uploadObj = {
                 file: baseUpload.file,
