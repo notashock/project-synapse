@@ -71,16 +71,20 @@ public class SessionService {
         log.info("[TRANSFER_REGISTRY] Registered active transfer: fileId={}, sender={}, target={} in session={}", fileId, sender, target, sessionId);
     }
 
-    public void handleTransferActivityEvent(String sessionId, String type, String fileId) {
+    public void handleTransferActivityEvent(String sessionId, String type, String fileId, String uploader) {
         if ("START".equals(type)) {
-            log.info("[TRANSFER_REGISTRY] Received START event for fileId={} in session={}", fileId, sessionId);
+            log.info("[TRANSFER_REGISTRY] Received START event for fileId={} by uploader={} in session={}", fileId, uploader, sessionId);
         } else if ("END".equals(type)) {
             java.util.Set<ActiveTransfer> transfers = activeTransferEdges.get(sessionId);
             if (transfers != null) {
-                boolean removed = transfers.removeIf(t -> t.fileId().equals(fileId));
-                if (removed) {
-                    log.info("[TRANSFER_REGISTRY] Deregistered active transfer(s) for fileId={} in session={}", fileId, sessionId);
-                }
+                transfers.removeIf(t -> {
+                    if (t.fileId().equals(fileId) && t.sender().equals(uploader)) {
+                        decrementUploadLoad(sessionId, fileId, uploader);
+                        return true;
+                    }
+                    return false;
+                });
+                log.info("[TRANSFER_REGISTRY] Deregistered active transfer for fileId={} by uploader={} in session={}", fileId, uploader, sessionId);
             }
         }
     }
@@ -125,6 +129,19 @@ public class SessionService {
                 emptySessionTimestamps.put(sessionId, System.currentTimeMillis());
             }
         }
+        cleanUserTransfers(sessionId, username);
+        
+        // Reset their upload loads for all files in this session
+        Map<String, Map<String, com.college.placementhub.model.FileOwnership>> sessionRegistry = ownershipRegistry.get(sessionId);
+        if (sessionRegistry != null) {
+            for (Map<String, com.college.placementhub.model.FileOwnership> fileRegistry : sessionRegistry.values()) {
+                com.college.placementhub.model.FileOwnership ownership = fileRegistry.get(username);
+                if (ownership != null) {
+                    ownership.setUploadLoad(0);
+                }
+            }
+        }
+        
         log.info("Unregistered socket ID {} for user {} in session {}", socketId, username, sessionId);
     }
 
@@ -638,7 +655,7 @@ public class SessionService {
         response.put("fileId", fileId);
         response.put("target", target);
 
-        if (sessionEdges != null && sessionEdges.containsKey(sender)) {
+        if (sessionEdges != null) {
             // BFS Search for shortest path
             java.util.Queue<String> queue = new java.util.LinkedList<>();
             java.util.Set<String> visited = new java.util.HashSet<>();
@@ -663,6 +680,7 @@ public class SessionService {
                     break;
                 }
                 
+                // Outgoing neighbors
                 java.util.Set<String> neighbors = sessionEdges.get(current);
                 if (neighbors != null) {
                     for (String neighbor : neighbors) {
@@ -671,6 +689,16 @@ public class SessionService {
                             parentMap.put(neighbor, current);
                             queue.add(neighbor);
                         }
+                    }
+                }
+
+                // Incoming neighbors (undirected traversal)
+                for (Map.Entry<String, java.util.Set<String>> entry : sessionEdges.entrySet()) {
+                    String neighbor = entry.getKey();
+                    if (entry.getValue().contains(current) && !visited.contains(neighbor)) {
+                        visited.add(neighbor);
+                        parentMap.put(neighbor, current);
+                        queue.add(neighbor);
                     }
                 }
             }
@@ -711,6 +739,29 @@ public class SessionService {
                         assignPayload.put("targets", newTargets);
                         template.convertAndSend("/topic/session/" + sessionId + "/topology/" + sender, assignPayload);
                         log.info("Dispatched verifyPath bridge ASSIGN_PEERS to user {} with targets: {}", sender, newTargets);
+                    }
+                } else {
+                    // Even if already assigned in meshEdges, if there is no actual open connection, re-dispatch ASSIGN_PEERS to trigger reconnect
+                    boolean hasActualEdge = false;
+                    if (sessionEdges != null) {
+                        java.util.Set<String> outNeighbors = sessionEdges.get(sender);
+                        if (outNeighbors != null && outNeighbors.contains(target)) {
+                            hasActualEdge = true;
+                        }
+                        if (!hasActualEdge) {
+                            java.util.Set<String> inNeighbors = sessionEdges.get(target);
+                            if (inNeighbors != null && inNeighbors.contains(sender)) {
+                                hasActualEdge = true;
+                            }
+                        }
+                    }
+                    if (!hasActualEdge && assigned != null && assigned.containsKey(sender)) {
+                        java.util.List<String> targets = assigned.get(sender);
+                        Map<String, Object> assignPayload = new java.util.HashMap<>();
+                        assignPayload.put("type", "ASSIGN_PEERS");
+                        assignPayload.put("targets", targets);
+                        template.convertAndSend("/topic/session/" + sessionId + "/topology/" + sender, assignPayload);
+                        log.info("Re-dispatched verifyPath bridge ASSIGN_PEERS to user {} with targets: {}", sender, targets);
                     }
                 }
             }

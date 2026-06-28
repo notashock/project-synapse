@@ -59,7 +59,14 @@ public class SenderBypassInterceptor implements ChannelInterceptor {
                             }
                             String fileId = extractJsonField(json, "fileId");
                             if (type != null && fileId != null) {
-                                sessionService.handleTransferActivityEvent(sessionId, type, fileId);
+                                String uploader = null;
+                                java.util.Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
+                                if (sessionAttributes != null) {
+                                    uploader = (String) sessionAttributes.get("username");
+                                }
+                                if (uploader != null) {
+                                    sessionService.handleTransferActivityEvent(sessionId, type, fileId, uploader);
+                                }
                             }
                         }
                     } catch (Exception e) {

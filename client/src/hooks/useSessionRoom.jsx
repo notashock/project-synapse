@@ -242,6 +242,10 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
             activeUploadKeysRef.current.add(transferKey);
             transferLifecycleRef.current.set(transferKey, 'recovering');
             
+            if (stompClientRef.current && stompClientRef.current.connected) {
+                stompClientRef.current.send(`/topic/session/${sessionId}/transfer-activity`, {}, JSON.stringify({ type: 'END', fileId }));
+            }
+            
             activeUploadCountRef.current = 0;
             if (processQueueRef.current) processQueueRef.current();
         } else {
