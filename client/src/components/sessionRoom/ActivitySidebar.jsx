@@ -29,12 +29,24 @@ export default function ActivitySidebar({ notifications, isActivityOpen, setIsAc
                         <p className="text-gray-500 text-[10px] sm:text-xs font-medium text-center">Waiting for activity...</p>
                     </div>
                 ) : (
-                    notifications.map((note, index) => (
-                        <div key={index} className="flex items-start gap-2.5 text-[10px] sm:text-xs font-medium text-gray-300 bg-white/5 p-2.5 sm:p-3 rounded-lg border-l-2 border-blue-500/60 hover:bg-white/[0.07] transition break-word">
-                            <Bell className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
-                            <span>{note}</span>
-                        </div>
-                    ))
+                    notifications.map((note, index) => {
+                        const isTraffic = note.startsWith('[TRAFFIC]');
+                        const cleanNote = isTraffic ? note.replace('[TRAFFIC]', '').trim() : note;
+                        return (
+                            <div key={index} className={`flex items-start gap-2.5 text-[10px] sm:text-xs font-medium text-gray-350 bg-white/5 p-2.5 sm:p-3 rounded-lg border-l-2 hover:bg-white/[0.07] transition break-word ${
+                                isTraffic 
+                                ? 'border-emerald-500/65 bg-emerald-500/[0.02]' 
+                                : 'border-blue-500/60'
+                            }`}>
+                                {isTraffic ? (
+                                    <Activity className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                                ) : (
+                                    <Bell className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                                )}
+                                <span>{cleanNote}</span>
+                            </div>
+                        );
+                    })
                 )}
             </div>
         </div>

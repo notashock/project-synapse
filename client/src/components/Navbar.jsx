@@ -34,7 +34,7 @@ export default function Navbar() {
         if (!window.confirm("Are you sure you want to end this session for everyone?")) return;
         setIsEnding(true);
         try {
-            await api.delete(`/sessions/end/${sessionNav.sessionId}`);
+            await api.delete(`/sessions/end/${sessionNav.sessionId}?guestUsername=${guestUsername || ''}`);
             toast.success("Session terminated.");
             navigate('/dashboard');
         } catch (error) {
@@ -73,7 +73,7 @@ export default function Navbar() {
                                 {sessionNav.sessionTitle || 'Live Workspace'}
                             </h1>
                             <p className="text-[10px] text-gray-500 font-medium truncate">
-                                Host: @{sessionNav.trainer}
+                                Host: @{sessionNav.host}
                             </p>
                         </div>
                     ) : (
@@ -102,7 +102,7 @@ export default function Navbar() {
                             </span>
 
                             {/* Join Code (trainer only) */}
-                            {((user?.username || guestUsername) === sessionNav.trainer) && sessionNav.joinCode && (
+                            {((user?.username || guestUsername) === sessionNav.host) && sessionNav.joinCode && (
                                 <button 
                                     onClick={handleCopyCode}
                                     className="flex items-center gap-1.5 bg-gray-800/80 border border-white/10 rounded-lg px-3 py-1.5 hover:border-white/20 transition group cursor-pointer"
@@ -126,7 +126,7 @@ export default function Navbar() {
                             </button>
 
                             {/* End Session (trainer only) */}
-                            {((user?.username || guestUsername) === sessionNav.trainer) && (
+                            {((user?.username || guestUsername) === sessionNav.host) && (
                                 <button 
                                     onClick={handleEndSession}
                                     disabled={isEnding || sessionNav.isLeaving}
@@ -190,7 +190,7 @@ export default function Navbar() {
                                 {sessionNav.isConnected ? 'Connected' : 'Reconnecting...'}
                             </span>
 
-                            {((user?.username || guestUsername) === sessionNav.trainer) && sessionNav.joinCode && (
+                            {((user?.username || guestUsername) === sessionNav.host) && sessionNav.joinCode && (
                                 <button onClick={handleCopyCode} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
                                     <span className="text-gray-500 uppercase tracking-wider font-bold">Code:</span>
                                     <span className="font-mono font-bold text-blue-400 tracking-widest">{sessionNav.joinCode}</span>
@@ -206,7 +206,7 @@ export default function Navbar() {
                             </button>
 
                             <div className="flex gap-2 pt-1">
-                                {((user?.username || guestUsername) === sessionNav.trainer) && (
+                                {((user?.username || guestUsername) === sessionNav.host) && (
                                     <button 
                                         onClick={() => { handleEndSession(); setMobileMenuOpen(false); }}
                                         disabled={isEnding}

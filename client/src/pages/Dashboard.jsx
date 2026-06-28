@@ -56,11 +56,10 @@ export default function Dashboard() {
             toast.success(`Session Created! Code: ${session.joinCode}`, { duration: 5000 });
             setSessionTitle(''); 
             
-            // Automatically join the newly created session
             navigate(`/session/${session.sessionId}`, { 
                 state: { 
                     joinCode: session.joinCode, 
-                    trainer: user?.username || guestUsername,
+                    host: user?.username || guestUsername,
                     sessionTitle: session.sessionTitle,
                     isLocal: isLocalMode
                 } 
@@ -75,7 +74,7 @@ export default function Dashboard() {
         if (!window.confirm("Are you sure you want to end this session for everyone?")) return;
         setDeletingId(sessionId);
         try {
-            const response = await api.delete(`/sessions/end/${sessionId}`);
+            const response = await api.delete(`/sessions/end/${sessionId}?guestUsername=${guestUsername || ''}`);
             toast.success(response.data || "Session ended.");
             await fetchSessions(); 
         } catch (error) {
@@ -86,7 +85,7 @@ export default function Dashboard() {
     const handleJoinSession = async (session) => {
         if (joiningId) return;
         let code = '';
-        if (user?.username === session.trainerUsername) {
+        if ((user?.username || guestUsername) === session.hostUsername) {
             code = session.joinCode; 
         } else {
             code = window.prompt(`Enter the 6-digit Join Code for '${session.sessionTitle}':`);
@@ -101,7 +100,7 @@ export default function Dashboard() {
             navigate(`/session/${session.sessionId}`, { 
                 state: { 
                     joinCode: session.joinCode, 
-                    trainer: session.trainerUsername,
+                    host: session.hostUsername,
                     sessionTitle: session.sessionTitle,
                     isLocal: session.isLocal ?? session.local
                 } 
@@ -135,7 +134,7 @@ export default function Dashboard() {
             navigate(`/session/${session.sessionId}`, {
                 state: {
                     joinCode: session.joinCode,
-                    trainer: session.trainerUsername,
+                    host: session.hostUsername,
                     sessionTitle: session.sessionTitle,
                     isLocal: session.isLocal ?? session.local
                 }
@@ -276,10 +275,10 @@ export default function Dashboard() {
                                             </h3>
                                             <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
                                                 <Users className="w-3 h-3" />
-                                                Host: <span className="text-gray-300 font-semibold">@{session.trainerUsername}</span>
+                                                Host: <span className="text-gray-300 font-semibold">@{session.hostUsername}</span>
                                             </p>
                                             
-                                            {(user?.username === session.trainerUsername || guestUsername === session.trainerUsername) && (
+                                            {(user?.username === session.hostUsername || guestUsername === session.hostUsername) && (
                                                 <div className="mt-3 flex items-center gap-2">
                                                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Access Code:</span>
                                                     <span className="text-xs font-mono font-bold tracking-[0.15em] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
@@ -299,7 +298,7 @@ export default function Dashboard() {
                                                 {joiningId === session.sessionId ? 'Joining...' : 'Join Workspace'}
                                             </button>
                                             
-                                            {(user?.username === session.trainerUsername || guestUsername === session.trainerUsername) && (
+                                            {(user?.username === session.hostUsername || guestUsername === session.hostUsername) && (
                                                 <button 
                                                     onClick={() => handleDeleteSession(session.sessionId)}
                                                     disabled={deletingId === session.sessionId || joiningId === session.sessionId}

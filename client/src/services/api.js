@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const base = import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.12:8080';
+const base = import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.7:8080';
 const formattedBaseURL = base.endsWith('/') ? `${base}api` : `${base}/api`;
 
 const api = axios.create({

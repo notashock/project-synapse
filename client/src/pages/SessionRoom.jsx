@@ -43,7 +43,7 @@ export default function SessionRoom() {
         sessionId, 
         navigate, 
         sessionMeta?.isLocal ?? sessionMeta?.local, 
-        sessionMeta?.trainerUsername || sessionMeta?.trainer
+        sessionMeta?.hostUsername || sessionMeta?.host
     );
 
     // Push session-specific data into Navbar via context
@@ -52,7 +52,7 @@ export default function SessionRoom() {
         setSessionNav({
             sessionId,
             sessionTitle: sessionMeta.sessionTitle || 'Live Workspace',
-            trainer: sessionMeta.trainerUsername || sessionMeta.trainer,
+            host: sessionMeta.hostUsername || sessionMeta.host,
             joinCode: sessionMeta.joinCode,
             isConnected: sessionData.isConnected,
             isLeaving: sessionData.isLeaving,
@@ -88,9 +88,23 @@ export default function SessionRoom() {
     return (
         <div className="flex flex-col lg:flex-row h-[calc(100dvh-53px)] bg-gray-900 text-white font-sans overflow-hidden">
             <div className="flex-1 p-3 sm:p-4 lg:p-6 flex flex-col min-w-0 h-full relative">
+                {sessionData.connectionError && (
+                    <div className="absolute top-4 left-4 right-4 bg-red-600/90 backdrop-blur text-white px-4 py-3 rounded-lg flex items-center justify-between z-50 border border-red-500 shadow-lg">
+                        <div>
+                            <span className="font-bold">WebRTC Inconsistency:</span> Some session members (
+                            {sessionData.connectionError.missing?.join(', ') || 'N/A'}) are not connected via P2P.
+                        </div>
+                        <button 
+                            onClick={sessionData.handleRetryConnection}
+                            className="bg-white text-red-600 font-bold px-3 py-1.5 rounded-md hover:bg-gray-100 transition-all text-sm ml-4 shadow shrink-0"
+                        >
+                            Retry Connection
+                        </button>
+                    </div>
+                )}
                 <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0 overflow-hidden pb-2">
                     <SharedFiles sessionData={sessionData} />
-                    <LiveChat sessionData={sessionData} trainer={sessionMeta?.trainerUsername || sessionMeta?.trainer} />
+                    <LiveChat sessionData={sessionData} hostUsername={sessionMeta?.hostUsername || sessionMeta?.host} />
                 </div>
             </div>
 

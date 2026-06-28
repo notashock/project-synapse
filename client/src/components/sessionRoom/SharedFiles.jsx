@@ -11,11 +11,16 @@ const formatFileSize = (bytes) => {
 export default function SharedFiles({ sessionData }) {
     const { 
         user, isConnected, sharedFiles, incomingTransfers, 
-        isUploading, uploadProgress, handleFileUpload 
+        uploadTransfers = {}, handleFileUpload,
+        retrySyncFile
     } = sessionData;
 
     const onFileChange = (e) => {
-        if (e.target.files[0]) handleFileUpload(e.target.files[0]);
+        if (e.target.files && e.target.files.length > 0) {
+            Array.from(e.target.files).forEach(file => {
+                handleFileUpload(file);
+            });
+        }
         e.target.value = null; 
     };
 
@@ -26,53 +31,72 @@ export default function SharedFiles({ sessionData }) {
                     <FolderOpen className="w-4 h-4 text-blue-400" /> Shared Files
                 </h2>
                 
-                {isUploading ? (
-                    <div className="relative overflow-hidden w-28 sm:w-36 h-7 sm:h-8 rounded-lg bg-gray-700 border border-gray-600 flex items-center justify-center">
-                        <div 
-                            className="absolute left-0 top-0 bottom-0 bg-linear-to-r from-blue-600 to-indigo-500 transition-all duration-500 ease-out" 
-                            style={{ width: `${uploadProgress}%` }}
-                        />
-                        <span className="relative z-10 text-[10px] sm:text-xs text-white font-bold drop-shadow-md">
-                            Uploading {uploadProgress}%
-                        </span>
-                    </div>
-                ) : (
-                    <label className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center gap-1.5 ${
-                        !isConnected 
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                        : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-lg shadow-blue-600/20 active:scale-95'
-                    }`}>
-                        <Upload className="w-3.5 h-3.5" />
-                        Share File
-                        <input type="file" className="hidden" onChange={onFileChange} disabled={!isConnected} />
-                    </label>
-                )}
+                <label className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center gap-1.5 ${
+                    !isConnected 
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-lg shadow-blue-600/20 active:scale-95'
+                }`}>
+                    <Upload className="w-3.5 h-3.5" />
+                    Share File
+                    <input type="file" className="hidden" onChange={onFileChange} disabled={!isConnected} multiple />
+                </label>
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                {sharedFiles.length === 0 && Object.keys(incomingTransfers).length === 0 ? (
+                {sharedFiles.length === 0 && 
+                 Object.keys(incomingTransfers).length === 0 && 
+                 Object.keys(uploadTransfers).length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center opacity-50 gap-2">
                         <FolderOpen className="w-8 h-8 text-gray-600" />
                         <p className="text-gray-500 text-xs font-medium">No files shared yet.</p>
                     </div>
                 ) : (
                     <>
-                        {Object.values(incomingTransfers).map((file) => (
-                            <div key={file.fileId} className="flex items-center bg-blue-500/5 px-3 py-2.5 rounded-lg border border-blue-500/20 gap-3">
-                                <ArrowDownToLine className="w-5 h-5 text-blue-400 animate-icon-pulse shrink-0" />
+                        {/* Outgoing Transfers */}
+                        {Object.values(uploadTransfers).map((file) => (
+                            <div key={file.fileId} className="flex items-center bg-emerald-500/5 px-3 py-2.5 rounded-lg border border-emerald-500/20 gap-3 animate-pulse">
+                                <Upload className="w-5 h-5 text-emerald-400 shrink-0" />
                                 <div className="truncate flex-1 min-w-0">
                                     <p className="text-xs sm:text-sm font-bold text-gray-200 truncate">{file.fileName}</p>
                                     <p className="text-[9px] sm:text-[10px] text-gray-400 font-semibold mt-0.5">
-                                        Incoming from <span className="text-blue-300">@{file.sender}</span>
+                                        Uploading... ({formatFileSize(file.fileSize)})
                                     </p>
                                 </div>
                                 <div className="w-16 sm:w-24 bg-gray-800 h-3.5 sm:h-4 rounded-full overflow-hidden border border-gray-600 shrink-0 relative flex justify-center items-center">
-                                    <div className="absolute left-0 top-0 bottom-0 bg-linear-to-r from-blue-500 to-indigo-500 transition-all duration-500 ease-out rounded-full" style={{ width: `${file.progress}%` }}></div>
-                                    <span className="text-[8px] sm:text-[9px] relative z-10 font-bold drop-shadow-md">{file.progress}%</span>
+                                    <div className="absolute left-0 top-0 bottom-0 bg-linear-to-r from-emerald-500 to-teal-500 transition-all duration-500 ease-out rounded-full" style={{ width: `${file.progress}%` }}></div>
+                                    <span className="text-[8px] sm:text-[9px] relative z-10 font-bold drop-shadow-md text-white">{file.progress}%</span>
                                 </div>
                             </div>
                         ))}
 
+                        {/* Incoming Transfers */}
+                        {Object.values(incomingTransfers).map((file) => {
+                            return (
+                                <div key={file.fileId} className="flex items-center bg-blue-500/5 px-3 py-2.5 rounded-lg border border-blue-500/20 gap-3">
+                                    <ArrowDownToLine className="w-5 h-5 text-blue-400 animate-icon-pulse shrink-0" />
+                                    <div className="truncate flex-1 min-w-0">
+                                        <p className="text-xs sm:text-sm font-bold text-gray-200 truncate">{file.fileName}</p>
+                                        <p className="text-[9px] sm:text-[10px] text-gray-400 font-semibold mt-0.5">
+                                            Incoming from <span className="text-blue-300">@{file.sender}</span>
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <button 
+                                            onClick={() => retrySyncFile(file.fileId)}
+                                            className="bg-gray-700/80 hover:bg-gray-700 hover:text-white text-gray-300 px-2.5 py-1 rounded-md text-[9px] font-bold transition active:scale-95 border border-white/5"
+                                        >
+                                            Retry Sync
+                                        </button>
+                                        <div className="w-16 sm:w-24 bg-gray-800 h-3.5 sm:h-4 rounded-full overflow-hidden border border-gray-600 relative flex justify-center items-center">
+                                            <div className="absolute left-0 top-0 bottom-0 bg-linear-to-r from-blue-500 to-indigo-500 transition-all duration-500 ease-out rounded-full" style={{ width: `${file.progress}%` }}></div>
+                                            <span className="text-[8px] sm:text-[9px] relative z-10 font-bold drop-shadow-md text-white">{file.progress}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {/* Completed Shared Files */}
                         {sharedFiles.map((file, index) => {
                             const isSender = file.sender === user?.username;
                             return (

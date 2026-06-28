@@ -74,3 +74,37 @@ export const clearSessionFiles = async () => {
     await tx.objectStore('files_blob').clear();
     await tx.done;
 };
+
+export const deleteFileRecord = async (fileId) => {
+    const db = await initDB();
+    const tx = db.transaction(['files_metadata', 'file_chunks', 'files_blob'], 'readwrite');
+    await tx.objectStore('files_metadata').delete(fileId);
+    
+    const chunkStore = tx.objectStore('file_chunks');
+    const allChunks = await chunkStore.getAll();
+    for (const chunk of allChunks) {
+        if (chunk.fileId === fileId) {
+            await chunkStore.delete([fileId, chunk.chunkIndex]);
+        }
+    }
+    
+    await tx.objectStore('files_blob').delete(fileId);
+    await tx.done;
+};
+
+export const deleteFileChunks = async (fileId) => {
+    const db = await initDB();
+    const tx = db.transaction('file_chunks', 'readwrite');
+    const store = tx.objectStore('file_chunks');
+    
+    // We get all chunks and delete the ones matching the fileId
+    // since we use a composite key ['fileId', 'chunkIndex']
+    const allChunks = await store.getAll();
+    for (const chunk of allChunks) {
+        if (chunk.fileId === fileId) {
+            await store.delete([fileId, chunk.chunkIndex]);
+        }
+    }
+    
+    await tx.done;
+};

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { MessageSquare, Send, Shield } from 'lucide-react';
 
-export default function LiveChat({ sessionData, trainer }) {
-    const { user, isConnected, chatMessages, isLeaving, chatEndRef, handleSendMessage } = sessionData;
+export default function LiveChat({ sessionData, hostUsername }) {
+    const { currentUser, isConnected, chatMessages, isLeaving, chatEndRef, handleSendMessage } = sessionData;
     const [text, setText] = useState('');
 
     const onSubmit = (e) => {
@@ -29,13 +29,13 @@ export default function LiveChat({ sessionData, trainer }) {
                     </div>
                 ) : (
                     chatMessages.map((msg, index) => {
-                        const isMe = msg.sender === user?.username;
-                        const isTrainer = msg.sender === trainer;
+                        const isMe = msg.sender === currentUser;
+                        const isHost = msg.sender === hostUsername;
                         return (
                             <div key={index} className={`flex flex-col w-full ${isMe ? 'items-end' : 'items-start'}`}>
                                 <span className={`text-[9px] sm:text-[10px] uppercase font-bold mb-0.5 px-1 flex items-center gap-1.5 ${isMe ? 'text-blue-400' : 'text-gray-400'}`}>
                                     {isMe ? 'You' : `@${msg.sender}`}
-                                    {isTrainer && (
+                                    {isHost && (
                                         <span className="flex items-center gap-0.5 text-[8px] bg-blue-500/10 border border-blue-500/30 text-blue-400 font-extrabold px-1 rounded uppercase tracking-wider">
                                             <Shield className="w-2.5 h-2.5" />
                                             Host
@@ -45,7 +45,7 @@ export default function LiveChat({ sessionData, trainer }) {
                                 <div className={`px-3 sm:px-4 py-2 rounded-2xl max-w-[85%] sm:max-w-[75%] shadow-md text-xs sm:text-sm break-word ${
                                     isMe 
                                     ? 'bg-blue-600 text-white rounded-tr-none shadow-[0_2px_8px_rgba(59,130,246,0.15)]' 
-                                    : isTrainer
+                                    : isHost
                                     ? 'bg-gray-750 border border-blue-500/10 text-blue-100 rounded-tl-none'
                                     : 'bg-gray-700 text-gray-100 rounded-tl-none'
                                 }`}>

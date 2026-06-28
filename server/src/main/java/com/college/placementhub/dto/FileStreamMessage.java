@@ -9,5 +9,6 @@ public record FileStreamMessage(
         String sender,
         int totalChunks,
         int chunkIndex,
-        String data
+        String data,
+        String targetUsername
 ){}
