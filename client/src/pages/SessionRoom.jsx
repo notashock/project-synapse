@@ -59,12 +59,16 @@ export default function SessionRoom() {
             handleLeaveSession: sessionData.handleLeaveSession,
             isActivityOpen,
             setIsActivityOpen,
+            activePeers: sessionData.activePeers,
+            currentUser: sessionData.currentUser,
+            isLocal: sessionMeta?.isLocal ?? sessionMeta?.local,
         });
 
         return () => setSessionNav(null);
     }, [
         sessionId, sessionMeta, sessionData.isConnected, sessionData.isLeaving, 
-        sessionData.handleLeaveSession, isActivityOpen, setSessionNav
+        sessionData.handleLeaveSession, isActivityOpen, setSessionNav,
+        sessionData.activePeers, sessionData.currentUser
     ]);
 
     useEffect(() => {
