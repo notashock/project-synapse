@@ -31,6 +31,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
     // Detailed Progress States
     const [uploadTransfers, setUploadTransfers] = useState({}); // fileId -> { fileName, progress, fileSize }
     const [incomingTransfers, setIncomingTransfers] = useState({});
+    const [activePeers, setActivePeers] = useState([]);
 
     // Refs
     const chatEndRef = useRef(null);
@@ -61,6 +62,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
     const transferLifecycleRef = useRef(new Map()); // Tracks state: 'queued'|'handshaking'|'path-verifying'|'streaming'|'recovering'
     const sentBusySignalsRef = useRef(new Set()); // Tracks sent busy signals: fileId
     const activeRoutingPathsRef = useRef(new Map()); // transferKey -> routingPath
+    const lastReportedIncomingProgressRef = useRef(new Map()); // fileId -> percentage
 
         const syncInProgressRef = useRef(false);
     const syncRequestedAgainRef = useRef(false);
@@ -179,6 +181,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
         });
         
         pendingAssembliesRef.current.delete(fileId);
+        lastReportedIncomingProgressRef.current.delete(fileId);
         
         // Clear any pending resend timeout for this fileId
         pendingResendsRef.current.forEach((timeoutId, key) => {
@@ -195,7 +198,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
         }
     }, [currentUser, sessionId]);
 
-    const initiateTransferRequest = useCallback((requests) => {
+    const initiateTransferRequest = useCallback(async (requests) => {
         const validRequests = [];
         for (const req of requests) {
             const transferKey = `${req.fileId}_${currentUser}`;
@@ -208,7 +211,28 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
 
             transferLifecycleRef.current.set(transferKey, 'handshaking');
             activeDownloadKeysRef.current.add(transferKey);
-            validRequests.push(req);
+
+            // Find contiguous chunks to determine where to resume
+            let startChunkIndex = req.startChunkIndex;
+            if (startChunkIndex === undefined) {
+                startChunkIndex = 0;
+                const fileMeta = await db.getFileMetadata(req.fileId);
+                if (fileMeta && fileMeta.totalChunks) {
+                    for (let i = 0; i < fileMeta.totalChunks; i++) {
+                        const chunk = await db.getFileChunk(req.fileId, i);
+                        if (chunk && chunk.data) {
+                            startChunkIndex = i + 1;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            validRequests.push({
+                ...req,
+                startChunkIndex
+            });
         }
 
         if (validRequests.length > 0 && stompClientRef.current && stompClientRef.current.connected) {
@@ -390,7 +414,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
             toast(`Re-requesting sync of "${file.fileName}" from chunk ${startChunkIndex}...`);
             setTransferStatuses(prev => ({ ...prev, [fileId]: 'Requested...' }));
 
-            initiateTransferRequest([{ fileId: file.fileId, sender: file.sender }]);
+            initiateTransferRequest([{ fileId: file.fileId, sender: file.sender, startChunkIndex }]);
         } catch (err) {
             console.error("Failed to retry sync file:", err);
             toast.error("Failed to raise sync request.");
@@ -623,8 +647,9 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                 const bytes = new Uint8Array(arrayBuffer);
                 let binary = '';
                 const len = bytes.byteLength;
-                for (let i = 0; i < len; i++) {
-                    binary += String.fromCharCode(bytes[i]);
+                const chunk = 8192;
+                for (let i = 0; i < len; i += chunk) {
+                    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
                 }
                 return window.btoa(binary);
             };
@@ -649,7 +674,10 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                 return { promise: activeBlockPromise, start: activeBlockStart };
             };
 
+            let lastReportedProgress = -1;
             const updateProgress = (percentage) => {
+                if (percentage === lastReportedProgress) return;
+                lastReportedProgress = percentage;
                 setUploadTransfers(prev => ({
                     ...prev,
                     [fileId]: {
@@ -756,8 +784,8 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                         await sendViaStomp(chunkData, chunkIndex);
                     }
 
-                    if (chunkIndex % 10 === 0 || chunkIndex === totalChunks - 1) {
-                        const progress = Math.round((chunkIndex / totalChunks) * 100);
+                    const progress = Math.round((chunkIndex / totalChunks) * 100);
+                    if (progress !== lastReportedProgress || chunkIndex === totalChunks - 1) {
                         updateProgress(progress);
 
                         const milestone = Math.floor(progress / 25) * 25;
@@ -769,7 +797,9 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                             }
                         }
                     }
-                    await new Promise(r => setTimeout(r, 0));
+                    if (chunkIndex % 20 === 0 || chunkIndex === totalChunks - 1) {
+                        await new Promise(r => setTimeout(r, 0));
+                    }
                 }
             };
 
@@ -1044,7 +1074,10 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
 
         if (data.type === 'START') {
             const downloadKey = `${data.fileId}_${currentUser}`;
-            transferLifecycleRef.current.set(downloadKey, 'streaming');
+            const isWebRTC = connectionTypeRef.current === 'webrtc' && webrtcManagerRef.current;
+            if (!isWebRTC) {
+                transferLifecycleRef.current.set(downloadKey, 'streaming');
+            }
             if (data.routingPath) {
                 activeRoutingPathsRef.current.set(downloadKey, data.routingPath);
             }
@@ -1066,11 +1099,20 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
             setIncomingTransfers(prev => ({
                 ...prev, [data.fileId]: { ...data, progress: 0 }
             }));
+
+            // Trigger automatic download/pull request in WebRTC mode
+            if (isWebRTC) {
+                console.log(`[RTC_TRACE] Auto-initiating pull request for shared file: ${data.fileId} from sender: ${data.sender}`);
+                initiateTransferRequest([{ fileId: data.fileId, sender: data.sender }]);
+            }
         }
         else if (data.type === 'CHUNK') {
             const downloadKey = `${data.fileId}_${currentUser}`;
             if (data.routingPath) {
                 activeRoutingPathsRef.current.set(downloadKey, data.routingPath);
+            }
+            if (transferLifecycleRef.current.get(downloadKey) !== 'streaming') {
+                transferLifecycleRef.current.set(downloadKey, 'streaming');
             }
             // Phase 5: Cancel Active Jitter Timeout if missing chunk arrives
             const jitterKey = `${data.fileId}_${data.chunkIndex}`;
@@ -1093,30 +1135,29 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
 
             await db.saveFileChunk(data.fileId, data.chunkIndex, bytes);
 
-            setIncomingTransfers(prev => {
-                const currentFile = prev[data.fileId];
-                const total = currentFile?.totalChunks || data.totalChunks || 1;
-                const progress = Math.min(100, Math.round(((data.chunkIndex + 1) / total) * 100));
+            const total = data.totalChunks || 1;
+            const progress = Math.min(100, Math.round(((data.chunkIndex + 1) / total) * 100));
+            const lastPercent = lastReportedIncomingProgressRef.current.get(data.fileId);
 
-                // Throttle state updates to avoid React render loop (Cascade Failure Fix)
-                if (currentFile && data.chunkIndex % 15 !== 0 && data.chunkIndex !== total - 1 && data.chunkIndex !== 0) {
-                    return prev;
-                }
-
-                return {
-                    ...prev,
-                    [data.fileId]: {
-                        ...(currentFile || {
-                            fileId: data.fileId,
-                            fileName: data.fileName || 'Incoming File',
-                            fileSize: data.fileSize || 0,
-                            sender: data.sender,
-                            totalChunks: data.totalChunks || 1
-                        }),
-                        progress
-                    }
-                };
-            });
+            if (lastPercent === undefined || progress !== lastPercent || data.chunkIndex === total - 1 || data.chunkIndex === 0) {
+                lastReportedIncomingProgressRef.current.set(data.fileId, progress);
+                setIncomingTransfers(prev => {
+                    const currentFile = prev[data.fileId];
+                    return {
+                        ...prev,
+                        [data.fileId]: {
+                            ...(currentFile || {
+                                fileId: data.fileId,
+                                fileName: data.fileName || 'Incoming File',
+                                fileSize: data.fileSize || 0,
+                                sender: data.sender,
+                                totalChunks: total
+                            }),
+                            progress
+                        }
+                    };
+                });
+            }
 
             // Phase 5: Post-Recovery Hook
             if (pendingAssembliesRef.current.has(data.fileId)) {
@@ -1326,6 +1367,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                     console.log("[RTC_TRACE] Reconnect safeguard: Tearing down existing WebRTCManager before STOMP reconnection.");
                     webrtcManagerRef.current.teardown("reconnect safeguard inside connect()");
                     webrtcManagerRef.current = null;
+                    setActivePeers([]);
                 }
             } else {
                 console.log("[RTC_TRACE] Reconnect safeguard: Retaining existing WebRTCManager with active transfers during STOMP reconnection.");
@@ -1718,6 +1760,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                         if (activity.type === 'START') {
                             activeTransfersRef.current.add(activity.fileId);
                         } else if (activity.type === 'END') {
+                            const wasActive = activeTransfersRef.current.has(activity.fileId);
                             activeTransfersRef.current.delete(activity.fileId);
                             if (incomingTransfersRef.current[activity.fileId]) {
                                 activeDownloadCountRef.current = 0;
@@ -1727,7 +1770,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                                     return next;
                                 });
                             }
-                            if (activeTransfersRef.current.size === 0) {
+                            if (wasActive && activeTransfersRef.current.size === 0) {
                                 toast("Session idle.");
                             }
                         } else if (activity.type === 'INQUIRE') {
@@ -1769,6 +1812,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                         if (webrtcManagerRef.current) {
                             webrtcManagerRef.current.teardown("STOMP connection loss");
                             webrtcManagerRef.current = null;
+                            setActivePeers([]);
                         }
                         activeUploadKeysRef.current.clear();
                         activeDownloadKeysRef.current.clear();
@@ -1922,6 +1966,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                     if (syncFilesWithServerRef.current) syncFilesWithServerRef.current(stompClientRef.current, "onPeerConnected callback for remote peer: " + remoteUsername);
                 },
                 onPeerConnectionDropped: (remoteUsername) => {
+                    setActivePeers(prev => prev.filter(u => u !== remoteUsername));
                     console.warn(`WebRTC peer dropped: ${remoteUsername}. Reporting to mesh router for self-healing.`);
                     if (stompClientRef.current && stompClientRef.current.connected) {
                         stompClientRef.current.send(`/app/session/${sessionId}/topology/report-drop`, {}, JSON.stringify({ 
@@ -1934,6 +1979,10 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                     }
                 },
                 onDataChannelOpen: (remoteUsername) => {
+                    setActivePeers(prev => {
+                        if (prev.includes(remoteUsername)) return prev;
+                        return [...prev, remoteUsername];
+                    });
                     if (stompClientRef.current && stompClientRef.current.connected) {
                         console.log(`[RTC_TRACE] Reporting topology open for targetUser: ${remoteUsername}`);
                         stompClientRef.current.send(`/app/session/${sessionId}/topology/report-open`, {}, JSON.stringify({ 
@@ -1990,6 +2039,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                     }
                 },
                 onDataChannelClosed: (remoteUsername) => {
+                    setActivePeers(prev => prev.filter(u => u !== remoteUsername));
                     if (stompClientRef.current && stompClientRef.current.connected) {
                         console.log(`[RTC_TRACE] Reporting topology close for targetUser: ${remoteUsername}`);
                         stompClientRef.current.send(`/app/session/${sessionId}/topology/report-close`, {}, JSON.stringify({ 
@@ -2061,6 +2111,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
                 console.log("[RTC_TRACE] WebRTC effect cleanup running.");
                 webrtcManager.teardown("React effect unmount/cleanup callback");
                 webrtcManagerRef.current = null;
+                setActivePeers([]);
                 activeUploadKeysRef.current.clear();
                 activeDownloadKeysRef.current.clear();
                 sentStartEventsRef.current.clear();
@@ -2160,7 +2211,7 @@ export const useSessionRoom = (sessionId, navigate, isLocal, hostUsername) => {
         uploadTransfers, chatEndRef,
         handleSendMessage, handleFileUpload, handleLeaveSession,
         connectionError, handleRetryConnection,
-        retrySyncFile, transferStatuses
+        retrySyncFile, transferStatuses, activePeers
     };
 };
 
