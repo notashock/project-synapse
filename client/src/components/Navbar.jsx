@@ -52,6 +52,50 @@ export default function Navbar() {
         }
     };
 
+    const renderTopology = () => {
+        if (!sessionNav) return null;
+        const peers = sessionNav.activePeers || [];
+        const cur = sessionNav.currentUser || guestUsername || user?.username;
+        
+        if (!sessionNav.isLocal) {
+            return (
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Cloud Server Relay</span>
+            );
+        }
+        
+        if (peers.length === 0) {
+            return (
+                <div className="flex items-center gap-1.5 bg-gray-800/50 border border-white/5 px-2.5 py-1 rounded-lg text-xs font-mono">
+                    <span className="text-emerald-400 font-bold">@{cur}</span>
+                    <span className="text-gray-500 text-[10px] ml-1">(Isolated)</span>
+                </div>
+            );
+        }
+        
+        if (peers.length === 1) {
+            return (
+                <div className="flex items-center gap-1.5 bg-gray-850/80 border border-white/10 px-3 py-1 rounded-lg text-xs font-mono shadow-inner">
+                    <span className="text-gray-400 font-semibold">@{peers[0]}</span>
+                    <span className="text-blue-400 font-extrabold animate-pulse px-0.5">&lt;--&gt;</span>
+                    <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">@{cur}</span>
+                </div>
+            );
+        }
+        
+        // peers.length >= 2
+        return (
+            <div className="flex items-center gap-1.5 bg-gray-850/80 border border-white/10 px-3 py-1 rounded-lg text-xs font-mono shadow-inner">
+                <span className="text-gray-400 font-semibold">@{peers[0]}</span>
+                <span className="text-blue-400 font-extrabold animate-pulse px-0.5">&lt;--</span>
+                <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">@{cur}</span>
+                <span className="text-blue-400 font-extrabold animate-pulse px-0.5">--&gt;</span>
+                <span className="text-gray-400 font-semibold">
+                    {peers.slice(1).map(p => `@${p}`).join(', ')}
+                </span>
+            </div>
+        );
+    };
+
     // ─── LOGIN PAGE: minimal branding ───
     if (isLoginPage) return null; // Login has its own branding
 
@@ -83,11 +127,24 @@ export default function Navbar() {
                     )}
                 </div>
 
+                {/* MIDDLE: Topology Visualizer */}
+                {isSessionPage && sessionNav && (
+                    <div className="hidden md:flex items-center justify-center flex-1 max-w-lg mx-auto">
+                        {renderTopology()}
+                    </div>
+                )}
+
                 {/* RIGHT: Desktop Actions */}
                 <div className="hidden sm:flex items-center gap-3">
                     {/* ─── SESSION PAGE actions ─── */}
                     {isSessionPage && sessionNav && (
                         <>
+                            {/* Current User Username */}
+                            {(user?.username || guestUsername) && (
+                                <span className="text-xs text-gray-400 font-medium border-r border-white/10 pr-3 mr-1">
+                                    <span className="text-blue-400 font-semibold">@{user?.username || guestUsername}</span>
+                                </span>
+                            )}
                             {/* Connection Status */}
                             <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${
                                 sessionNav.isConnected 
@@ -181,6 +238,14 @@ export default function Navbar() {
                 <div className="sm:hidden mt-3 pt-3 border-t border-white/10 flex flex-col gap-2.5">
                     {isSessionPage && sessionNav && (
                         <>
+                            {(user?.username || guestUsername) && (
+                                <span className="text-xs text-gray-400">Logged in as <span className="text-blue-400 font-semibold">@{user?.username || guestUsername}</span></span>
+                            )}
+                            {/* Topology Visualizer on Mobile */}
+                            <div className="py-1">
+                                <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold block mb-1">Network Mesh:</span>
+                                {renderTopology()}
+                            </div>
                             <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border w-fit ${
                                 sessionNav.isConnected 
                                     ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' 
